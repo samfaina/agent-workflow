@@ -82,7 +82,7 @@ What to build: the end-to-end behaviour this ticket makes work, from the user's 
 - Checkboxes `- [ ] N.M` hold the acceptance criteria and nothing else; each one says how it is verified. OpenSpec counts these boxes as the change's progress.
 - Each ticket includes the tests and docs its own work needs.
 - No file paths or code snippets, as the skills already ask.
-- The **manual test ticket** is the last group, `Blocked by:` every other ticket. Its checkboxes are steps a human performs by hand and the result they should see. The steps run in order on one fresh setup, so each expected result must follow from the state the earlier steps leave: work out ids, counts and lists from that state, not from the examples in other tickets. A step that needs a different starting state says so.
+- The **manual test ticket** is the last group, `Blocked by:` every other ticket. Its checkboxes are steps a human performs by hand and the result they should see. Keep it to about five steps: the main path, one failure, and what only a person can judge, such as the docs or the wording of a message. Behaviour the automated tests already cover stays with them. The steps run in order on one fresh setup, so each expected result must follow from the state the earlier steps leave: work out ids, counts and lists from that state, not from the examples in other tickets. A step that needs a different starting state says so.
 
 ## When a skill says "fetch the relevant ticket"
 
@@ -97,8 +97,9 @@ Used by `/implement`, `/to-tickets` and `/code-review`.
 If the ticket is the manual test ticket:
 
 1. Before listing the steps, check each expected result against the spec and against the state the steps before it leave. When one cannot happen, say so, add a `- Note:` to the ticket with the result that should happen, and use that one.
-2. List the steps for the user and ask them to paste or describe what they saw at each step. Do not offer a list of steps to tick.
-3. Compare what they saw with each expected result. Tick only the boxes whose result matches; for the others, add a `- Note:` with what they saw.
+2. List the steps with their expected results, then give them as one block the user pastes into their shell (PowerShell on Windows, bash elsewhere). The block starts from a fresh setup, runs every step in order, and prints each command, its output and its exit code, plus whatever a step asks the user to look at, such as a doc. End the message with a direct question asking for the block's output. Do not offer a list of steps to tick.
+3. Compare the output with each expected result. Tick only the boxes whose result matches; for the others, add a `- Note:` with what was seen.
+4. The ticket changes only `tasks.md`: skip tdd and code-review, which the build tickets and `/close-change` already cover, and commit the ticked boxes.
 
 ## While working on a ticket
 
@@ -108,7 +109,7 @@ Used by `/implement`.
 - Tick a box (`- [x] N.M`) as soon as its criterion is met and verified. The ticket is done when all its boxes are ticked.
 - Commit with a Conventional Commits message and the trailer `Refs: <change>#N` on its last line, with the ticked `tasks.md` in the same commit as the code.
 - When the work shows the spec is wrong or incomplete, leave the spec as it is: add a `- Note:` bullet to the ticket and tell the user.
-- In the final message, show the code-review reports under the headings `## Standards` and `## Spec`, written exactly so in every conversation language, as their own sections and not folded into the ticket summary.
+- In the final message of a build ticket, show the code-review reports under the headings `## Standards` and `## Spec`, written exactly so in every conversation language, as their own sections and not folded into the ticket summary.
 - End the final message with the next command: `/implement <change>#N` for the next frontier ticket, or `/close-change <change>` when every box of every ticket is ticked.
 
 ## When a skill says "comment on the ticket"
