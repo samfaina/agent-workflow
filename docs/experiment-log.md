@@ -4,6 +4,8 @@ The automated trial (installer, adapter by hand, hooks, archive) passed in `.san
 
 ## Runs
 
+**The experiment ended with run 4.** It passed every check with no failure, and every item that runs 1 to 3 left open passed live. What it left untested, fixes 1 and 2 of [run 4](experiments/run-4.md), changes only this plan and its checker, not what a project installs. Do not create a `run-5.md` for it. Start a new run only after a change to the kit that a project receives (a skill, a template, a hook or the installer), and say in its issue what it must cover.
+
 Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md), [run 2](experiments/run-2.md), [run 3](experiments/run-3.md) and [run 4](experiments/run-4.md) are done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy the latest `run-N.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
 
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
@@ -12,7 +14,7 @@ You stay in **one Claude Code window**. After each step, a checker reads the pro
 ! node E:/projects/agent-workflow/scripts/experiment.mjs check <step> <change>
 ```
 
-Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
+Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Type `!` as the first character, with no space before it: the prompt then switches to shell mode. If the line reaches Claude as a message instead, Claude runs the checker itself; the result still counts, but do not run that check again in the session. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
 
 Run each check only when its step is finished, and as the next thing you type. The checker reads a session only up to the first check typed in it, so what Claude says after a check does not count, and a check run too early cannot be repeated in that session.
 
@@ -131,8 +133,8 @@ The last ticket has no code: you run the finished CLI by hand and Claude compare
    /clear
    /implement remove-todo#N
    ```
-2. Claude's first message lists the steps, each with its expected result, and asks what you saw. The same steps are the boxes of the last ticket in `openspec/changes/remove-todo/tasks.md`. **Do not run the check yet**: the ticket is not done until you have answered.
-3. Ask Claude: "Give me every step as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code." Open a new PowerShell window in the trial folder, paste the block, and paste its whole output back to Claude. This takes a minute instead of typing each step, and Claude sees the real output of every step. Do not confirm a step you have not run.
+2. Claude's first message lists the steps, each with its expected result, gives them as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code, and asks for that output. The same steps are the boxes of the last ticket in `openspec/changes/remove-todo/tasks.md`. **Do not run the check yet**: the ticket is not done until you have answered.
+3. Open a new PowerShell window in the trial folder, paste the block, and paste its whole output back to Claude, with anything the steps ask you to judge. This takes a minute instead of typing each step, and Claude sees the real output of every step. If the first message has no block, ask Claude: "Give me every step as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code." Do not confirm a step you have not run.
 4. Claude compares each step with its expected result, ticks the boxes that match, adds a `- Note:` for those that do not, and commits the ticket.
 5. Only now, run the check:
    ```

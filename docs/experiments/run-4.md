@@ -43,6 +43,8 @@ What run 3 left untested live:
 
 ## Fixes after this run
 
+Fixes 1 and 2 were applied on the branch `fix/fourth-run-findings`. Fix 1 ends a segment at a message that starts with the checker line (`! node ...experiment.mjs check`, with or without spaces before `!`), and only in what the user typed, so a tool result that prints the checker's usage does not end it. On the transcripts of run 4, the segments of tickets 2, 3 and 4 now end before Claude's own checker run.
+
 Each fix names the kit document it goes into:
 
 1. **Checks sent as a message** (rows 4 to 6): in `scripts/experiment/transcript.mjs`, `CHECKER` only matches `<bash-input>`, so a `!` line that reaches Claude as a message (with a leading space, or for another reason) does not end the segment, and whatever Claude says after its own checker run would count towards a second check. Also end a segment at a user message that contains `experiment.mjs check`. In `docs/experiment-log.md`, where the plan introduces the `!` prefix, say to type `!` as the first character with no space before it, and that if Claude receives the line as a message, the check is still valid but should not be repeated.
@@ -50,4 +52,4 @@ Each fix names the kit document it goes into:
 
 **Seen, no fix proposed:** `/grill-with-docs` suggested a change name of its own (`add-remove-command`) for the second run in a row; the user picks the name when typing `/to-spec`. A stray `/mattpocock-skills:wayfinder` with no argument was declined correctly and pointed back to the workflow. `/close-change` declined the test helper that ticket 3's review had deferred to it, as out of the change's scope. The three low security findings repeat from run 3 and belong to the sample project, not the kit.
 
-**Still untested live**, for a next run: fixes 1 and 2 once applied. Every item that runs 1 to 3 left open has now passed live.
+**Still untested live:** fixes 1 and 2. Every item that runs 1 to 3 left open has now passed live, and the two fixes touch only the plan and its checker, so no run 5 is planned: the experiment ends here (see [the plan](../experiment-log.md#runs)).
