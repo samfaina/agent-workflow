@@ -1,0 +1,13 @@
+{
+  "name": "sample-node-cli",
+  "version": "0.1.0",
+  "description": "A tiny to-do CLI used to try the agent-workflow kit end to end.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "todo": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}
