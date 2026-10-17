@@ -125,6 +125,15 @@ export function checkSetup(dir) {
   const broken = links.filter((l) => !existsSync(l.target));
   report.check(`all ${links.length} ../../references/ links resolve`, broken.length === 0, broken.map((l) => `${path.relative(dir, l.file)} -> ${l.link}`).join('\n'));
 
+  let language = '';
+  try {
+    language = JSON.parse(read(dir, '.claude/settings.local.json')).language ?? '';
+  } catch {
+    // Reported below.
+  }
+  report.check(`.claude/settings.local.json sets the conversation language${language ? ` (${language})` : ''}`, Boolean(language), 'no "language" in .claude/settings.local.json');
+  report.check('.claude/settings.local.json is ignored by git', sh('git check-ignore -q .claude/settings.local.json', dir).status === 0, 'add it to .gitignore');
+
   const personal = path.join(homedir(), '.claude', 'skills');
   const shadowing = existsSync(personal) ? readdirSync(personal).filter((n) => WORKFLOW_SKILLS.includes(n)) : [];
   report.check('no personal skill in ~/.claude/skills shadows a workflow skill', shadowing.length === 0, `rename or remove: ${shadowing.join(', ')}`);
