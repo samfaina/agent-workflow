@@ -11,10 +11,10 @@ Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experi
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
 
 ```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check <step> <change>
+! node ../../scripts/experiment.mjs check <step> <change>
 ```
 
-Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Type `!` as the first character, with no space before it: the prompt then switches to shell mode. If the line reaches Claude as a message instead, Claude runs the checker itself; the result still counts, but do not run that check again in the session. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
+The path is relative to the trial folder, `.sandbox/run-N` inside the kit, where the session runs. Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Type `!` as the first character, with no space before it: the prompt then switches to shell mode. If the line reaches Claude as a message instead, Claude runs the checker itself; the result still counts, but do not run that check again in the session. Every check is also appended to `.sandbox/results/run-N.md` in the kit (the run of the trial folder `.sandbox/run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
 
 Run each check only when its step is finished, and as the next thing you type. The checker reads a session only up to the first check typed in it, so what Claude says after a check does not count, and a check run too early cannot be repeated in that session.
 
@@ -24,26 +24,25 @@ The feature for the trial: a `remove <id>` command for the sample to-do CLI, cha
 
 Skip this section if you already have a trial project with the kit committed on `main`.
 
-Run the whole plan from the kit's main checkout, `E:\projects\agent-workflow`, not from a git worktree of it. Every path in this plan points there, and the checker saves its results next to the copy of `experiment.mjs` that runs, so a trial set up in a worktree splits its results over two folders.
+Every path in this plan is relative: to the root of the kit's checkout in this section, and to the trial folder from then on. The trial folder goes inside the checkout, so `../../scripts/experiment.mjs` always runs the copy of the checker that set up the trial, and the results stay in that checkout's `.sandbox/results`.
 
-In PowerShell:
+In PowerShell, from the root of the kit's checkout:
 
 ```powershell
-cd E:\projects\agent-workflow
 node scripts\experiment.mjs setup
 ```
 
 It copies the sample project to `.sandbox\run-N` (N from the highest `docs\experiments\run-N.md`; a second trial of the same run goes to `run-N-2`), creates the git repository, installs the kit (language Spanish, written to `.claude/settings.local.json`; check command `npm test`; no optional skills), commits it and merges it into `main`. Then go to the folder it prints and start Claude Code:
 
 ```powershell
-cd E:\projects\agent-workflow\.sandbox\run-N
+cd .sandbox\run-N
 claude
 ```
 
 In Claude Code:
 
 ```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check setup
+! node ../../scripts/experiment.mjs check setup
 ```
 
 By eye:
@@ -65,7 +64,7 @@ Answer the questions ("yes" to a recommendation is fine). Then, in the **same se
 Confirm the test seams when it asks. When it finishes:
 
 ```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check spec remove-todo
+! node ../../scripts/experiment.mjs check spec remove-todo
 ```
 
 By eye:
@@ -82,7 +81,7 @@ By eye:
 Review the proposed breakdown and approve it (or ask for changes first). When it finishes:
 
 ```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check tickets remove-todo
+! node ../../scripts/experiment.mjs check tickets remove-todo
 ```
 
 By eye:
@@ -105,7 +104,7 @@ For each build ticket N, in order:
 3. **Only if N is the last build ticket:** do section 5 now, in this same session.
 4. Run the check:
    ```
-   ! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
+   ! node ../../scripts/experiment.mjs check implement remove-todo
    ```
    Its `next:` line gives the command for the following ticket.
 
@@ -138,7 +137,7 @@ The last ticket has no code: you run the finished CLI by hand and Claude compare
 4. Claude compares each step with its expected result, ticks the boxes that match, adds a `- Note:` for those that do not, and commits the ticket.
 5. Only now, run the check:
    ```
-   ! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
+   ! node ../../scripts/experiment.mjs check implement remove-todo
    ```
    The `next:` line now says `/close-change remove-todo`.
 
@@ -152,7 +151,7 @@ The last ticket has no code: you run the finished CLI by hand and Claude compare
 It ends with `git push` and `gh pr create` commands: the trial project has no remote, so do not run them. Then:
 
 ```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check close remove-todo
+! node ../../scripts/experiment.mjs check close remove-todo
 ```
 
 By eye:
