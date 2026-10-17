@@ -44,6 +44,11 @@ What run 2 left untested live:
 
 ## Fixes after this run
 
+Fix 1 was applied during the run (#13); fixes 2 to 6 on the branch `fix/third-run-findings`. Where the result differs from the proposal:
+
+- Fix 2 also reached the `tasks` rules in `templates/openspec/config.yaml`, which `openspec instructions tasks` prints, and the manual test paragraph of `docs/guide.md`.
+- Fix 4 limits the `## Standards` / `## Spec` rule of **While working on a ticket** to build tickets, since the manual test has no review now.
+
 Each fix names the kit document it goes into:
 
 1. **The plan, sections 4 to 6** (rows 3, 5 and 6): applied during the run in `docs/experiment-log.md`. A check runs only when its step is finished, because the segment ends at the first check. Section 4 is numbered steps: after `/to-tickets`, note which ticket is the last build ticket, and do section 5 in its session before its check. Section 5 says what to do when the check came first, and adds the `quality-gate` output to the by-eye list. Section 6 says where the steps are, that the check comes after answering, and to ask Claude for one PowerShell block that runs every step. Still untested live: the guardrails in the last build ticket's session, and Claude writing that block.

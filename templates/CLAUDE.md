@@ -2,7 +2,7 @@
 
 ## Repository language
 
-Write everything that goes into the repository in English: code, comments, commit messages, OpenSpec artifacts and docs. The language you talk to the user in comes from the `language` setting in `.claude/settings.local.json`.
+Write everything that goes into the repository in English: code, comments, commit messages, OpenSpec artifacts and docs. The language you talk to the user in comes from the `language` setting in `.claude/settings.local.json`. Every message to the user is in that language, short notes between tool calls included.
 
 ## Specialist skills
 

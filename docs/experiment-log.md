@@ -22,6 +22,8 @@ The feature for the trial: a `remove <id>` command for the sample to-do CLI, cha
 
 Skip this section if you already have a trial project with the kit committed on `main`.
 
+Run the whole plan from the kit's main checkout, `E:\projects\agent-workflow`, not from a git worktree of it. Every path in this plan points there, and the checker saves its results next to the copy of `experiment.mjs` that runs, so a trial set up in a worktree splits its results over two folders.
+
 In PowerShell:
 
 ```powershell

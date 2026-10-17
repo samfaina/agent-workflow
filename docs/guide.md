@@ -170,7 +170,7 @@ Check progress at any time with `openspec list` (it shows ticked boxes out of to
 
 In a **fresh session** for every ticket, type `/implement add-done-command#1`, then `#2` and so on: `/to-tickets` lists the commands, and each ticket ends by naming the next one. Without a number, `/implement add-done-command` picks the first ticket whose blockers are done. Claude states the ticket's title, builds it test-first, runs `code-review` on its work and shows its `## Standards` and `## Spec` reports, ticks the ticket's boxes, and commits with `Refs: add-done-command#N`. The quality gate runs your check command before the commit.
 
-Repeat until the next ticket is the manual test: Claude lists its steps, you run them by hand and tell Claude what you saw at each one, and Claude ticks the boxes whose result matches.
+Repeat until the next ticket is the manual test: Claude lists its few steps and gives them as one block for your shell. You run the block, paste back what it printed, and Claude ticks the boxes whose result matches.
 
 ### 4.5 `/close-change <change>`: finish it
 
