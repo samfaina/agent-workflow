@@ -17,7 +17,13 @@ triage label (`ready-for-agent`, `needs-triage`...) | nothing: this tracker has 
 
 ## Branch
 
-Every change lives on its own branch, `change/<change>`. Before writing any file of a change, run `git branch --show-current`. If it prints a protected branch (`protectedBranches` in `.claude/agent-workflow.json`, by default `main` and `master`), run `git switch change/<change>` if that branch exists, or `git switch -c change/<change>` if it does not. Pushing and opening pull requests is the user's job.
+Every change lives on its own branch, `change/<change>`, created from a protected branch (`protectedBranches` in `.claude/agent-workflow.json`, by default `main` and `master`). Before writing any file of a change:
+
+1. Run `git branch --show-current`. If it prints `change/<change>`, you are done.
+2. Run `git status --porcelain`. If it lists files that are not part of this change (anything outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`), stop and ask the user to commit or stash them first.
+3. If `change/<change>` exists, run `git switch change/<change>`. Otherwise switch to the first protected branch that exists and run `git switch -c change/<change>`; uncommitted change files come along.
+
+Pushing and opening pull requests is the user's job.
 
 ## When a skill says "publish to the issue tracker" (a spec)
 

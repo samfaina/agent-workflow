@@ -1,8 +1,8 @@
 @AGENTS.md
 
-## Language
+## Repository language
 
-Talk to the user in {{LANGUAGE}}. Write everything that goes into the repository in English: code, comments, commit messages, OpenSpec artifacts and docs.
+Write everything that goes into the repository in English: code, comments, commit messages, OpenSpec artifacts and docs. The language you talk to the user in comes from the `language` setting in `.claude/settings.local.json`.
 
 ## Specialist skills
 

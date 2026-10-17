@@ -14,6 +14,8 @@ import { setupTrial } from './experiment/setup.mjs';
 
 const STEPS = { setup: checkSetup, spec: checkSpec, tickets: checkTickets, implement: checkImplement, close: checkClose };
 const MARK = { ok: '[ok]  ', fail: '[FAIL]', skip: '[skip]' };
+// Forward slashes: `!` in Claude Code runs commands in Git Bash, which drops backslashes.
+const CHECKER = path.join(KIT_ROOT, 'scripts', 'experiment.mjs').replace(/\\/g, '/');
 
 function usage() {
   console.log(`Usage:
@@ -21,7 +23,7 @@ function usage() {
   node <kit>/scripts/experiment.mjs check <${Object.keys(STEPS).join('|')}> [change]
 
 Run "check" from inside the trial project, for example in Claude Code:
-  ! node ${path.join(KIT_ROOT, 'scripts', 'experiment.mjs')} check spec remove-todo`);
+  ! node ${CHECKER} check spec remove-todo`);
 }
 
 function record(dir, step, change, items) {
@@ -38,7 +40,7 @@ const [command, ...rest] = process.argv.slice(2);
 if (command === 'setup') {
   try {
     const dir = await setupTrial(rest[0] ? { dir: path.resolve(rest[0]) } : {});
-    console.log(`\nTrial project ready: ${dir}\nNext:\n  cd "${dir}"\n  claude\nThen in Claude Code:\n  ! node "${path.join(KIT_ROOT, 'scripts', 'experiment.mjs')}" check setup`);
+    console.log(`\nTrial project ready: ${dir}\nNext:\n  cd "${dir}"\n  claude\nThen in Claude Code:\n  ! node "${CHECKER}" check setup`);
   } catch (error) {
     console.error(`experiment setup: ${error.message}`);
     process.exitCode = 1;

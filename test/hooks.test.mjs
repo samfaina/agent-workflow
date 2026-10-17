@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_CONFIG, checkCommand, protectedPattern } from '../hooks/shared.mjs';
+import { DEFAULT_CONFIG, checkCommand, protectedPattern, shellWriteTargets } from '../hooks/shared.mjs';
 
 const HOOKS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'hooks');
 
@@ -157,6 +157,55 @@ describe('protected-paths matching', () => {
   });
 });
 
+describe('protected-paths for shell commands', () => {
+  const projectDir = path.resolve('/work/app');
+  const blockedBy = (command) => shellWriteTargets(command).map((t) => protectedPattern(t, { projectDir, cwd: projectDir, config: DEFAULT_CONFIG })).find(Boolean) ?? null;
+
+  const blocked = [
+    'echo KEY=value >> .env',
+    'echo KEY=value>.env',
+    "printf 'x' > openspec/specs/todo/spec.md",
+    'cat secrets.txt | tee .env',
+    'tee -a .claude/settings.json < x',
+    "Set-Content .env 'KEY=value'",
+    'Add-Content -Path .env -Value "KEY=value"',
+    "'KEY=value' | Out-File -FilePath .env.local",
+    'New-Item -ItemType File -Path .env',
+    'Remove-Item .claude/hooks/agent-workflow/git-guard.mjs',
+    'rm -rf .claude/skills/tdd',
+    'del .claude\\agent-workflow.json',
+    'cp .env.example .env',
+    'Copy-Item config.json -Destination .claude/settings.json',
+    'mv notes.md openspec/specs/todo/spec.md',
+    "sed -i 's/false/true/' .claude/agent-workflow.json",
+    'touch .env',
+    'bash -c "echo x > .env"',
+    'pwsh -Command "Set-Content .env x"',
+    'npm test && echo done > .env',
+  ];
+  for (const command of blocked) {
+    it(`blocks: ${command}`, () => assert.notEqual(blockedBy(command), null));
+  }
+
+  const allowed = [
+    'echo hi > notes.txt',
+    'npm test 2>&1 | tail -5',
+    'node src/cli.js list > /dev/null',
+    'Get-Content .env',
+    'cat .env',
+    "sed 's/a/b/' .env",
+    'cp .env.example config/example.env',
+    'git diff > change.patch',
+    'echo x > $null',
+    'ls > openspec/changes/remove-todo/notes.md',
+    'Set-Content src/config.js "x"',
+    'rm -rf node_modules',
+  ];
+  for (const command of allowed) {
+    it(`allows: ${command}`, () => assert.equal(blockedBy(command), null));
+  }
+});
+
 describe('hook scripts end to end', () => {
   function makeRepo({ checkCommand = '', branch = 'change/demo' } = {}) {
     const dir = mkdtempSync(path.join(tmpdir(), 'aw-hooks-'));
@@ -212,6 +261,17 @@ describe('hook scripts end to end', () => {
     const result = run('protected-paths.mjs', dir, { file_path: path.join(dir, 'openspec', 'specs', 'a', 'spec.md') });
     assert.equal(result.status, 2);
     assert.match(result.stderr, /openspec\/specs\/\*\*/);
+  });
+
+  it('protected-paths blocks a shell command that writes to .env', () => {
+    const dir = makeRepo();
+    const result = run('protected-paths.mjs', dir, { command: "echo 'KEY=value' >> .env" });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /\.env is protected .*This command writes to it/);
+  });
+
+  it('protected-paths lets other shell commands through', () => {
+    assert.equal(run('protected-paths.mjs', makeRepo(), { command: 'npm test 2>&1 | tail -5' }).status, 0);
   });
 
   it('protected-paths allows an edit to a change artifact', () => {
