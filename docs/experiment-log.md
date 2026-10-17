@@ -4,7 +4,7 @@ The automated trial (installer, adapter by hand, hooks, archive) passed in `.san
 
 ## Runs
 
-Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md), [run 2](experiments/run-2.md) and [run 3](experiments/run-3.md) are done, [run 4](experiments/run-4.md) is next, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy the latest `run-N.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
+Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md), [run 2](experiments/run-2.md), [run 3](experiments/run-3.md) and [run 4](experiments/run-4.md) are done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy the latest `run-N.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
 
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
 
