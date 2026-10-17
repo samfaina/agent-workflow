@@ -12,7 +12,7 @@ You stay in **one Claude Code window**. After each step, a checker reads the pro
 ! node E:/projects/agent-workflow/scripts/experiment.mjs check <step> <change>
 ```
 
-Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
+Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Type `!` as the first character, with no space before it: the prompt then switches to shell mode. If the line reaches Claude as a message instead, Claude runs the checker itself; the result still counts, but do not run that check again in the session. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
 
 Run each check only when its step is finished, and as the next thing you type. The checker reads a session only up to the first check typed in it, so what Claude says after a check does not count, and a check run too early cannot be repeated in that session.
 
@@ -131,8 +131,8 @@ The last ticket has no code: you run the finished CLI by hand and Claude compare
    /clear
    /implement remove-todo#N
    ```
-2. Claude's first message lists the steps, each with its expected result, and asks what you saw. The same steps are the boxes of the last ticket in `openspec/changes/remove-todo/tasks.md`. **Do not run the check yet**: the ticket is not done until you have answered.
-3. Ask Claude: "Give me every step as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code." Open a new PowerShell window in the trial folder, paste the block, and paste its whole output back to Claude. This takes a minute instead of typing each step, and Claude sees the real output of every step. Do not confirm a step you have not run.
+2. Claude's first message lists the steps, each with its expected result, gives them as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code, and asks for that output. The same steps are the boxes of the last ticket in `openspec/changes/remove-todo/tasks.md`. **Do not run the check yet**: the ticket is not done until you have answered.
+3. Open a new PowerShell window in the trial folder, paste the block, and paste its whole output back to Claude, with anything the steps ask you to judge. This takes a minute instead of typing each step, and Claude sees the real output of every step. If the first message has no block, ask Claude: "Give me every step as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code." Do not confirm a step you have not run.
 4. Claude compares each step with its expected result, ticks the boxes that match, adds a `- Note:` for those that do not, and commits the ticket.
 5. Only now, run the check:
    ```

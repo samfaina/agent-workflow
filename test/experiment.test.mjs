@@ -141,6 +141,19 @@ describe('transcript reading', () => {
     assert.doesNotMatch(run.assistantText, /## Standards/);
   });
 
+  it('also ends a run at a checker run sent as a message, but not at a tool result naming the checker', () => {
+    const sent = fakeHome(projectDir, [
+      user('<command-name>/implement</command-name>\n<command-args>remove-todo#2</command-args>'),
+      user([{ type: 'tool_result', content: 'usage: node scripts/experiment.mjs check <step> <change>' }]),
+      assistant([{ type: 'text', text: 'Revisión: Spec ok, Estándares ok' }]),
+      user(' ! node E:/kit/scripts/experiment.mjs check implement remove-todo'),
+      assistant([{ type: 'text', text: '## Standards\nok\n## Spec\nok' }]),
+    ]);
+    const run = latestRun(projectDir, 'implement', { args: 'remove-todo', home: sent });
+    assert.match(run.assistantText, /Revisión/);
+    assert.doesNotMatch(run.assistantText, /## Standards/);
+  });
+
   it('lists every run of a command, oldest first', () => {
     const twice = fakeHome(projectDir, [
       user('<command-name>/implement</command-name>\n<command-args>remove-todo#1</command-args>', '2026-10-17T10:00:00Z'),

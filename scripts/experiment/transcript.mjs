@@ -28,10 +28,18 @@ export function parseLines(text) {
 
 const COMMAND = /<command-name>\/([\w:-]+)<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/;
 const CHECKER = /<bash-input>[^<]*experiment\.mjs[^<]*\bcheck\b/;
+// The same line can reach Claude as a message instead (a space before `!`),
+// and Claude then runs it itself. Tool results that name the checker do not count.
+const CHECKER_SENT = /^\s*!?\s*node\s+\S*experiment\.mjs\s+check\b/;
+
+function typedText(content) {
+  return Array.isArray(content) ? content.filter((part) => part.type === 'text').map((part) => part.text).join('\n') : textOf(content);
+}
 
 // Splits one session's entries into segments, one per slash command typed.
-// A segment ends at the first checker run typed with `!`: what Claude says
-// about the checker's output is not part of the command being checked.
+// A segment ends at the first checker run typed with `!`, or sent as a
+// message: what Claude says about the checker's output is not part of the
+// command being checked.
 export function segments(entries) {
   const result = [];
   let current = null;
@@ -45,7 +53,7 @@ export function segments(entries) {
         result.push(current);
         continue;
       }
-      if (CHECKER.test(text)) current = null;
+      if (CHECKER.test(text) || CHECKER_SENT.test(typedText(content))) current = null;
     }
     current?.entries.push(entry);
   }
