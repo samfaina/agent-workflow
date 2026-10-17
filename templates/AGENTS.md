@@ -20,7 +20,9 @@ Specs and tickets live in OpenSpec (`openspec/`), reached only through the steps
 
 ## Quality gate
 
-Before every commit, `checkCommand` from `.claude/agent-workflow.json` runs and must pass. When it fails, fix the cause and commit again.
+A hook runs `checkCommand` from `.claude/agent-workflow.json` on every `git commit` and blocks the commit when it fails, showing you its output. Commit normally: there is no need to run the check yourself first. When a commit is blocked, fix the cause and commit again.
+
+The hooks also block pushes, destructive git commands and writes to protected paths. When one blocks an action, tell the user what was blocked and why; changing what is allowed is the user's decision.
 
 ## Agent skills
 

@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
-import { mergeSettings, writeBlockSafely, writeFileSafely } from './files.mjs';
+import { ensureGitignored, mergeSettings, writeBlockSafely, writeFileSafely, writeLanguageSetting } from './files.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
 
 export const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -115,6 +115,8 @@ export async function init({
     await writeFileSafely(path.join(claudeDir, 'hooks', 'agent-workflow', file), readFileSync(path.join(KIT_ROOT, 'hooks', file), 'utf8'), ctx);
   }
   await mergeSettings(path.join(claudeDir, 'settings.json'), JSON.parse(template('.claude/settings.json')), ctx);
+  await writeLanguageSetting(path.join(claudeDir, 'settings.local.json'), language, ctx);
+  ensureGitignored(projectDir, '.claude/settings.local.json', ctx);
   await writeFileSafely(
     path.join(claudeDir, 'agent-workflow.json'),
     template('.claude/agent-workflow.json').replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand)),
@@ -126,9 +128,7 @@ export async function init({
     await writeFileSafely(path.join(projectDir, doc), template(doc), ctx);
   }
   await writeBlockSafely(path.join(projectDir, 'AGENTS.md'), template('AGENTS.md'), ctx);
-  const claude = template('CLAUDE.md')
-    .replace('{{LANGUAGE}}', language)
-    .replace('{{SPECIALISTS}}', specialistLines(installedSkills(projectDir)));
+  const claude = template('CLAUDE.md').replace('{{SPECIALISTS}}', specialistLines(installedSkills(projectDir)));
   await writeBlockSafely(path.join(projectDir, 'CLAUDE.md'), claude, ctx);
   warnAboutOldAgentSkillsBlock(ctx);
 

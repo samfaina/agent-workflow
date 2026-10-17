@@ -66,7 +66,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    node $HOME\agent-workflow\bin\agent-workflow.js init
    ```
 4. Answer the questions:
-   - **Language**: the language Claude talks to you in. Everything written to the repository stays in English.
+   - **Language**: the language Claude talks to you in. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
    - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. Leave it empty if the project has no checks yet; you can set it later in `.claude/agent-workflow.json`.
    - **Optional skills**: one question per skill, with the reason it exists. Say yes only to the topics your project touches. You can run the installer again later to add more.
 5. Look at what it created and commit it:
@@ -90,6 +90,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
 | `.claude/references/` | Shared checklists that Addy's skills link to |
 | `.claude/hooks/agent-workflow/` | The hooks (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
+| `.claude/settings.local.json` | Your conversation language (merged into your local settings if the file exists); added to `.gitignore` |
 | `.claude/agent-workflow.json` | Hook configuration: protected branches, push, check command, protected paths |
 | `docs/agents/issue-tracker.md` | The **adapter**: how Matt's skills read and write OpenSpec |
 | `docs/agents/domain.md` | Where the skills find the glossary, ADRs and living spec |
@@ -278,17 +279,19 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
 | --- | --- | --- |
 | `git-guard` | Bash and PowerShell commands | `git push` (unless `allowPush` is `true`, and even then force pushes and pushes to protected branches), commits, merges and rebases on a protected branch, `reset --hard`, `clean -f`, `branch -D`, `checkout -- <paths>`, `restore` (except `--staged`), `switch --discard-changes`, `stash drop`/`clear`, history rewriting, `--no-verify` |
 | `quality-gate` | Bash and PowerShell commands that contain `git commit` | the commit, when `checkCommand` fails; Claude sees the last lines of its output |
-| `protected-paths` | File edits by Claude | edits to any path matching `protectedPaths` (`**` crosses folders; a pattern without `/` matches a file name anywhere) |
+| `protected-paths` | File edits by Claude, and Bash and PowerShell commands | edits to any path matching `protectedPaths` (`**` crosses folders; a pattern without `/` matches a file name anywhere), and commands that write, move or delete such a path: redirections (`>`, `>>`), `tee`, `cp`, `mv`, `rm`, `touch`, `sed -i`, `Set-Content`, `Add-Content`, `Out-File`, `New-Item`, `Remove-Item`, `Copy-Item`, `Move-Item` |
 
 `.claude/agent-workflow.json` is itself protected, so Claude cannot loosen its own guardrails: edit it yourself. The living spec (`openspec/specs/`) is protected because only `openspec archive`, run by `/close-change`, should change it.
 
-The hooks see the commands Claude runs and the files it edits through its edit tools. They are a guardrail against mistakes, not a security boundary: a script Claude writes could still change a protected file.
+The hooks read the commands Claude runs and the files it edits through its edit tools. They are a guardrail against mistakes, not a security boundary: a write from inside a program (a `node -e` or `python -c` one-liner, or a script Claude writes) can still reach a protected file. `AGENTS.md` tells Claude to report a blocked action to you instead of working around it.
 
 ## 7. Troubleshooting
 
 **A workflow command does not appear when I type `/`.** Restart Claude Code in the project folder. Check that `.claude/skills/<name>/SKILL.md` exists; if not, run the installer again.
 
 **I see each Matt skill twice, such as `/to-spec` and `/mattpocock-skills:to-spec`.** You also have Matt's plugin installed globally. Use the short names: they are the project's copies, configured by the adapter. Plugin skills always carry the `plugin:` prefix, so the two never collide.
+
+**Claude answers in the wrong language.** Check that `.claude/settings.local.json` holds `"language": "<your language>"` and restart Claude Code. Without it, a `language` in `~/.claude/settings.json` applies to every project, and it outranks what `CLAUDE.md` says. Run the installer again to set it, or add the line yourself.
 
 **A skill behaves differently from this guide.** A skill with the same name in `~/.claude/skills/` (your personal skills) wins over the project's copy. Rename or remove the personal one.
 

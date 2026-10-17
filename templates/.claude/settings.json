@@ -14,6 +14,11 @@
             "command": "node",
             "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-workflow/quality-gate.mjs"],
             "timeout": 600
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-workflow/protected-paths.mjs"]
           }
         ]
       },

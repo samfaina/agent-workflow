@@ -7,7 +7,8 @@ import { skillsWhere } from '../installer/catalog.mjs';
 import { init } from '../installer/init.mjs';
 import { sharedReferenceLinks } from '../installer/references.mjs';
 
-const STOCK_CONFIG = 'schema: spec-driven\n\n# Project context (optional)\n#   context: |\n';
+const KIT_HOOKS = JSON.parse(readFileSync(new URL('../templates/.claude/settings.json', import.meta.url), 'utf8')).hooks.PreToolUse;
+const STOCK_CONFIG ='schema: spec-driven\n\n# Project context (optional)\n#   context: |\n';
 
 // Simulates the Skills CLI and OpenSpec so the installer runs offline.
 function fakeTools(projectDir) {
@@ -94,7 +95,9 @@ describe('installer in a new project', () => {
     assert.equal(JSON.parse(read(dir, '.claude/settings.json')).hooks.PreToolUse.length, 2);
     assert.match(read(dir, 'openspec/config.yaml'), /Ticket format/);
     assert.match(read(dir, 'AGENTS.md'), /^<!-- agent-workflow:start -->/);
-    assert.match(read(dir, 'CLAUDE.md'), /Talk to the user in Spanish/);
+    assert.equal(JSON.parse(read(dir, '.claude/settings.local.json')).language, 'spanish');
+    assert.match(read(dir, '.gitignore'), /^\.claude\/settings\.local\.json$/m);
+    assert.match(read(dir, 'CLAUDE.md'), /Write everything that goes into the repository in English/);
     assert.match(read(dir, 'CLAUDE.md'), /`security-and-hardening`: handling untrusted input/);
     assert.doesNotMatch(read(dir, 'CLAUDE.md'), /performance-optimization/);
   });
@@ -112,9 +115,9 @@ describe('installer in a new project', () => {
   it('changes nothing when run a second time', async () => {
     const dir = newProject();
     await install(dir);
-    const before = ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', 'openspec/config.yaml'].map((f) => read(dir, f));
+    const before = ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', '.claude/settings.local.json', '.gitignore', 'openspec/config.yaml'].map((f) => read(dir, f));
     const { io, commands } = await install(dir);
-    const after = ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', 'openspec/config.yaml'].map((f) => read(dir, f));
+    const after = ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', '.claude/settings.local.json', '.gitignore', 'openspec/config.yaml'].map((f) => read(dir, f));
     assert.deepEqual(after, before);
     assert.deepEqual(io.questions.filter((q) => !q.startsWith('Already installed')), []);
     assert.ok(!commands.some((c) => c.includes('skills@latest add')), 'nothing to reinstall');
@@ -131,6 +134,8 @@ describe('installer in an existing project', () => {
       '.claude/skills/tdd/SKILL.md': '---\nname: tdd\n---\nmy local copy\n',
       '.claude/commands/opsx/propose.md': 'opsx\n',
       'openspec/config.yaml': 'schema: spec-driven\ncontext: |\n  Our own context\n',
+      '.claude/settings.local.json': JSON.stringify({ language: 'english', permissions: { allow: ['Bash(ls)'] } }),
+      '.gitignore': 'node_modules/\n',
     };
     for (const [file, content] of Object.entries(files)) {
       mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
@@ -142,7 +147,11 @@ describe('installer in an existing project', () => {
   it('keeps every existing file when the user says no', async () => {
     const { dir, files } = existingProject();
     const { io, commands } = await install(dir, { answer: false });
-    for (const [file, content] of Object.entries(files)) assert.equal(read(dir, file), content, file);
+    for (const [file, content] of Object.entries(files)) {
+      if (file !== '.gitignore') assert.equal(read(dir, file), content, file);
+    }
+    assert.equal(read(dir, '.gitignore'), 'node_modules/\n.claude/settings.local.json\n', 'only appends the ignore line');
+    assert.ok(io.questions.some((q) => q.includes('sets the language to "english"')));
     assert.ok(!commands.some((c) => c.startsWith('openspec init')), 'existing openspec/ is kept');
     assert.ok(!commands.some((c) => / tdd( |$)/.test(c)), 'existing skill is not reinstalled');
     assert.ok(io.questions.some((q) => q.startsWith('WARN openspec/config.yaml already has its own')));
@@ -159,8 +168,24 @@ describe('installer in an existing project', () => {
     assert.deepEqual(settings.permissions, { allow: ['Bash(pnpm test)'] });
     const commands = settings.hooks.PreToolUse.flatMap((g) => g.hooks.map((h) => [h.command, ...(h.args ?? [])].join(' ')));
     assert.ok(commands.includes('node mine.js'));
-    assert.equal(commands.filter((c) => c.includes('agent-workflow')).length, 3);
+    assert.equal(commands.filter((c) => c.includes('agent-workflow')).length, KIT_HOOKS.flatMap((g) => g.hooks).length);
     assert.match(read(dir, 'docs/agents/issue-tracker.md'), /Issue tracker: OpenSpec/);
     assert.ok(!existsSync(path.join(dir, '.claude', 'commands', 'opsx')));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')), { language: 'spanish', permissions: { allow: ['Bash(ls)'] } });
+  });
+
+  it('adds hooks missing from a matcher group even when another group has the same script', async () => {
+    const dir = newProject();
+    const old = { hooks: { PreToolUse: [
+      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-workflow/git-guard.mjs'] }] },
+      { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-workflow/protected-paths.mjs'] }] },
+    ] } };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'settings.json'), JSON.stringify(old));
+    await install(dir, { answer: true });
+    const groups = JSON.parse(read(dir, '.claude/settings.json')).hooks.PreToolUse;
+    const scripts = (list, matcher) => list.filter((g) => g.matcher === matcher).flatMap((g) => g.hooks.map((h) => path.basename(h.args[0]))).sort();
+    assert.equal(groups.length, KIT_HOOKS.length, 'no duplicate groups');
+    for (const { matcher } of KIT_HOOKS) assert.deepEqual(scripts(groups, matcher), scripts(KIT_HOOKS, matcher), matcher);
   });
 });

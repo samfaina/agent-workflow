@@ -62,6 +62,42 @@ export async function writeBlockSafely(file, body, { io, projectDir }) {
   return 'appended';
 }
 
+// Sets the conversation language in .claude/settings.local.json, keeping every
+// other setting. The local scope outranks ~/.claude/settings.json, so a global
+// "language" cannot override the language chosen for this project.
+export async function writeLanguageSetting(file, language, { io, projectDir }) {
+  const shown = path.relative(projectDir, file).replace(/\\/g, '/');
+  const value = language.trim().toLowerCase();
+  let settings = {};
+  if (existsSync(file)) {
+    try {
+      settings = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      io.warn(`${shown} is not valid JSON, so the language was not set. Add "language": "${value}" to it by hand.`);
+      return 'kept';
+    }
+  }
+  if (settings.language === value) return 'unchanged';
+  if (settings.language && !(await io.confirm(`${shown} sets the language to "${settings.language}". Change it to "${value}"?`, true))) {
+    io.log(`  kept ${shown}`);
+    return 'kept';
+  }
+  const existed = existsSync(file);
+  write(file, `${JSON.stringify({ ...settings, language: value }, null, 2)}\n`);
+  io.log(`  ${existed ? 'updated' : 'created'} ${shown}`);
+  return existed ? 'replaced' : 'created';
+}
+
+// Appends `entry` to the project's .gitignore unless a line already matches it.
+export function ensureGitignored(projectDir, entry, { io }) {
+  const file = path.join(projectDir, '.gitignore');
+  const current = existsSync(file) ? normalise(readFileSync(file, 'utf8')) : '';
+  if (current.split('\n').some((line) => line.trim() === entry || line.trim() === `/${entry}`)) return 'unchanged';
+  write(file, `${current}${current && !current.endsWith('\n') ? '\n' : ''}${entry}\n`);
+  io.log(`  added ${entry} to .gitignore`);
+  return current ? 'appended' : 'created';
+}
+
 // Adds the kit's hook entries to .claude/settings.json, keeping every existing
 // setting. Entries already present (same script) are skipped.
 export async function mergeSettings(file, kitSettings, { io, projectDir }) {
@@ -81,13 +117,15 @@ export async function mergeSettings(file, kitSettings, { io, projectDir }) {
   next.hooks ??= {};
   for (const [event, groups] of Object.entries(kitSettings.hooks)) {
     next.hooks[event] ??= [];
-    const existing = next.hooks[event].flatMap(scriptsIn);
     for (const group of groups) {
+      // Compare within the same matcher: a script wired for edits is not wired for commands.
+      const sameMatcher = next.hooks[event].filter((g) => g.matcher === group.matcher);
+      const existing = sameMatcher.flatMap(scriptsIn);
       const missing = group.hooks.filter((h) => !existing.includes([h.command, ...(h.args ?? [])].join(' ')));
-      if (missing.length) {
-        next.hooks[event].push({ ...group, hooks: missing });
-        added += missing.length;
-      }
+      if (!missing.length) continue;
+      if (sameMatcher.length) sameMatcher[0].hooks = [...(sameMatcher[0].hooks ?? []), ...missing];
+      else next.hooks[event].push({ ...group, hooks: missing });
+      added += missing.length;
     }
   }
   if (!added) return 'unchanged';
