@@ -4,7 +4,7 @@ The automated trial (installer, adapter by hand, hooks, archive) passed in `.san
 
 ## Runs
 
-Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md) and [run 2](experiments/run-2.md) are done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy `run-2.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
+Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md), [run 2](experiments/run-2.md) and [run 3](experiments/run-3.md) are done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy the latest `run-N.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
 
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
 
@@ -13,6 +13,8 @@ You stay in **one Claude Code window**. After each step, a checker reads the pro
 ```
 
 Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
+
+Run each check only when its step is finished, and as the next thing you type. The checker reads a session only up to the first check typed in it, so what Claude says after a check does not count, and a check run too early cannot be repeated in that session.
 
 The feature for the trial: a `remove <id>` command for the sample to-do CLI, change name `remove-todo`.
 
@@ -85,24 +87,27 @@ By eye:
 
 ## 4. Sessions 3 and on: `/implement`, one per build ticket
 
-`/to-tickets` ends with one command per ticket. For each build ticket N, in order:
+`/to-tickets` ends with one `/implement remove-todo#N` command per ticket. The last ticket is the **manual test** (section 6); the one before it is the **last build ticket**. Write both numbers down now: with four tickets, 1 to 3 are build tickets, 3 is the last one, and 4 is the manual test.
 
-```
-/clear
-/implement remove-todo#N
-```
+For each build ticket N, in order:
 
-Confirm the seams when it asks. When it finishes, and before anything else in the session:
-
-```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
-```
-
-Run the check once per ticket, after Claude's last message about it. The checker reads the session only up to the first check you type, so what Claude says about the check's output does not count. Its `next:` line gives the command for the following ticket. When that is the manual test, the last build ticket's session first goes through step 5.
+1. Start its session:
+   ```
+   /clear
+   /implement remove-todo#N
+   ```
+   Confirm the seams if it asks.
+2. Wait until Claude has committed the ticket and its last message ends with the next command (`/implement remove-todo#<N+1>`).
+3. **Only if N is the last build ticket:** do section 5 now, in this same session.
+4. Run the check:
+   ```
+   ! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
+   ```
+   Its `next:` line gives the command for the following ticket.
 
 ## 5. Guardrails, in the last build ticket's session
 
-In the session of the last build ticket, after Claude has committed it and **before** you run its `check implement`, ask Claude, one at a time:
+This is step 3 of section 4: in the session of the last build ticket, after Claude has committed it and **before** you run its `check implement`, ask Claude, one at a time:
 
 1. "This is a test of the git-guard hook: run `git push -u origin change/remove-todo` and show me exactly what happens."
 2. "This is a test of the protected-paths hook: run `echo DEBUG=true >> .env` with your shell tool and show me exactly what happens."
@@ -110,27 +115,30 @@ In the session of the last build ticket, after Claude has committed it and **bef
 
 Each prompt says it is a test and names the exact command, so Claude attempts it and the hook, not Claude's reading of the rules, decides. Claude may still decline first; if it does, say "yes, try it".
 
-Then run `check implement remove-todo`. It reports each hook that fired (`git-guard`, `protected-paths`, `quality-gate`), and because the next ticket is the manual test, it fails for any of the three that has not fired in an `/implement` session yet. By eye:
+Then run `check implement remove-todo`. It reports each hook that fired (`git-guard`, `protected-paths`, `quality-gate`), and because the next ticket is the manual test, it fails for any of the three that has not fired in an `/implement` session yet. If you ran the check before the prompts, send them at the start of the manual test session instead, before running its steps, and note it in the run's file. By eye:
 
 - [ ] Claude reverted the broken test and made no commit.
+- [ ] The `quality-gate` message shows the start of the test output (`> sample-node-cli@0.1.0 test`) and its end (`# fail 1`). When the output is long, a marker shows where it was cut.
 
 ## 6. The manual test ticket
 
-```
-/clear
-/implement remove-todo#N
-```
+The last ticket has no code: you run the finished CLI by hand and Claude compares what you saw with the expected results.
 
-with N the manual test ticket. Claude lists the steps: run each in a PowerShell window and tell Claude what you saw at each one, pasting the output. Run every step; do not confirm one you have not run. When it finishes:
-
-```
-! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
-```
-
-The `next:` line now says `/close-change remove-todo`.
+1. Start its session, with N the manual test ticket:
+   ```
+   /clear
+   /implement remove-todo#N
+   ```
+2. Claude's first message lists the steps, each with its expected result, and asks what you saw. The same steps are the boxes of the last ticket in `openspec/changes/remove-todo/tasks.md`. **Do not run the check yet**: the ticket is not done until you have answered.
+3. Ask Claude: "Give me every step as one PowerShell block that runs on a fresh to-do file and prints each command, its output and its exit code." Open a new PowerShell window in the trial folder, paste the block, and paste its whole output back to Claude. This takes a minute instead of typing each step, and Claude sees the real output of every step. Do not confirm a step you have not run.
+4. Claude compares each step with its expected result, ticks the boxes that match, adds a `- Note:` for those that do not, and commits the ticket.
+5. Only now, run the check:
+   ```
+   ! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
+   ```
+   The `next:` line now says `/close-change remove-todo`.
 
 ## 7. Last session: `/close-change`
-
 
 ```
 /clear
