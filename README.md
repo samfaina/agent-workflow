@@ -13,7 +13,7 @@ npx github:samfaina/agent-workflow init
 ```
 
 - [docs/guide.md](docs/guide.md): install, daily flow, every skill and why, troubleshooting.
-- [docs/experiment-log.md](docs/experiment-log.md): the plan for the first real run.
+- [docs/experiment-log.md](docs/experiment-log.md): the plan for a real run of the workflow; each run's results are in [docs/experiments/](docs/experiments/).
 - [docs/adr/](docs/adr/) and [GLOSSARY.md](GLOSSARY.md): decisions and vocabulary.
 
 Development: `npm test` runs the hook and installer tests. After editing `installer/skills.json`, run `node scripts/sync-guide.mjs`.
