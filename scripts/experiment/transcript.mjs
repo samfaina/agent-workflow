@@ -2,7 +2,7 @@
 // to see what a workflow command actually did. The format is internal to
 // Claude Code, so every reader here is best effort: callers treat a missing
 // transcript as "not checked", never as a failure.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -27,20 +27,25 @@ export function parseLines(text) {
 }
 
 const COMMAND = /<command-name>\/([\w:-]+)<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/;
+const CHECKER = /<bash-input>[^<]*experiment\.mjs[^<]*\bcheck\b/;
 
 // Splits one session's entries into segments, one per slash command typed.
+// A segment ends at the first checker run typed with `!`: what Claude says
+// about the checker's output is not part of the command being checked.
 export function segments(entries) {
   const result = [];
   let current = null;
   for (const entry of entries) {
     const content = entry.message?.content;
     if (entry.type === 'user') {
-      const match = textOf(content).match(COMMAND);
+      const text = textOf(content);
+      const match = text.match(COMMAND);
       if (match) {
         current = { command: match[1], args: (match[2] ?? '').trim(), timestamp: entry.timestamp, entries: [] };
         result.push(current);
         continue;
       }
+      if (CHECKER.test(text)) current = null;
     }
     current?.entries.push(entry);
   }
@@ -78,21 +83,24 @@ export function summarise(segment) {
   return summary;
 }
 
-// The latest run of `/command` (optionally with these args) in any session of the project.
-export function latestRun(projectDir, command, { args, home } = {}) {
+// Every run of `/command` (optionally with these args) in any session of the project, oldest first.
+export function allRuns(projectDir, command, { args, home } = {}) {
   const dir = transcriptDir(projectDir, home);
-  if (!existsSync(dir)) return null;
-  const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl')).map((f) => path.join(dir, f))
-    .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
-  let latest = null;
-  for (const file of files) {
-    for (const segment of segments(parseLines(readFileSync(file, 'utf8')))) {
+  if (!existsSync(dir)) return [];
+  const runs = [];
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.jsonl'))) {
+    for (const segment of segments(parseLines(readFileSync(path.join(dir, file), 'utf8')))) {
       if (segment.command !== command) continue;
       if (args && !segment.args.startsWith(args)) continue;
-      if (!latest || String(segment.timestamp) >= String(latest.timestamp)) latest = segment;
+      runs.push(segment);
     }
   }
-  return latest && summarise(latest);
+  return runs.sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp))).map(summarise);
+}
+
+// The latest run of `/command` (optionally with these args) in any session of the project.
+export function latestRun(projectDir, command, options = {}) {
+  return allRuns(projectDir, command, options).at(-1) ?? null;
 }
 
 // True when a skill was loaded from the project's .claude/skills, not a plugin or ~/.claude.

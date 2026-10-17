@@ -7,7 +7,21 @@ import path from 'node:path';
 import { skillsWhere } from '../../installer/catalog.mjs';
 import { sharedReferenceLinks } from '../../installer/references.mjs';
 import { frontier, isDone, parseTickets } from './tickets.mjs';
-import { latestRun, loadedFromProject } from './transcript.mjs';
+import { allRuns, latestRun, loadedFromProject } from './transcript.mjs';
+
+const HOOKS = ['git-guard', 'protected-paths', 'quality-gate'];
+
+// The command that continues a change: the next ticket, or the close once every ticket is done.
+export function nextCommand(change, tickets) {
+  const next = frontier(tickets);
+  return next ? `/implement ${change}#${next.number}` : `/close-change ${change}`;
+}
+
+// A numbered list followed by a question, in whatever language the conversation is in.
+export const asksAfterList = (text) => /^\s*(\*\*)?1\.\s[\s\S]*\?/m.test(text);
+
+// The code-review report, under its two literal headings.
+export const hasReviewHeadings = (text) => /^## Standards\b/m.test(text) && /^## Spec\b/m.test(text);
 
 const WORKFLOW_SKILLS = ['grill-with-docs', 'grilling', 'domain-modeling', 'to-spec', 'to-tickets', 'implement', 'tdd', 'code-review', 'codebase-design', 'close-change'];
 
@@ -91,7 +105,7 @@ function noTriageLabels(report, dir, change) {
 }
 
 function guardrailMessages(report, run, label) {
-  for (const hook of ['git-guard', 'protected-paths', 'quality-gate']) {
+  for (const hook of HOOKS) {
     if (run.toolResults.includes(`agent-workflow ${hook}`)) report.check(`${label}: ${hook} hook fired and Claude saw its message`, true);
   }
 }
@@ -218,7 +232,7 @@ export function checkTickets(dir, change) {
   noTriageLabels(report, dir, change);
   withRun(report, dir, 'to-tickets', change, 'to-tickets transcript', (run) => {
     report.check('to-tickets: ran from the project copy', loadedFromProject(run, 'to-tickets', dir), `loaded from: ${run.skillDirs[0] ?? 'unknown'}`);
-    report.check('to-tickets: showed the breakdown and asked you to approve it', run.questions > 0 || /blocked by/i.test(run.assistantText), 'no breakdown question found');
+    report.check('to-tickets: showed the breakdown and asked you to approve it', run.questions > 0 || asksAfterList(run.assistantText), 'no numbered breakdown followed by a question found');
     noGitHubIssues(report, run, 'to-tickets');
   });
   return report.items;
@@ -232,19 +246,27 @@ export function checkImplement(dir, change) {
   const tickets = existsSync(path.join(dir, file)) ? parseTickets(read(dir, file)) : [];
   const ticketCommits = commits(dir, `${baseBranch(dir)}..HEAD`).filter((c) => c.refs.some((r) => r.startsWith(`${change}#`)));
   const latest = ticketCommits[0];
-  report.check(`a commit carries "Refs: ${change}#N"`, Boolean(latest), 'no commit with the Refs trailer');
-  if (latest) {
-    const number = Number(latest.refs.find((r) => r.startsWith(`${change}#`)).split('#')[1]);
-    const ticket = tickets.find((t) => t.number === number);
-    report.check(`latest ticket commit is Conventional Commits (${latest.subject})`, /^(feat|fix|refactor|test|docs|chore|perf|style|build|ci)(\([^)]+\))?!?: .+/.test(latest.subject), latest.subject);
-    report.check(`ticket ${change}#${number} has every box ticked`, ticket && isDone(ticket), ticket ? ticket.boxes.filter((b) => !b.done).map((b) => `${b.group}.${b.item}`).join(', ') : 'ticket not found');
-    const touched = git(`show --name-only --format= ${latest.hash}`, dir);
-    report.check('tasks.md is in the same commit as the work', touched.includes(`${change}/tasks.md`), 'tasks.md not in the commit');
-    const blockers = ticket?.blockedBy ?? [];
-    report.check(`ticket ${number} was unblocked`, blockers.every((n) => isDone(tickets.find((t) => t.number === n) ?? { boxes: [] })), `blockers not done: ${blockers.join(', ')}`);
+  if (!latest) {
+    report.skip(`a commit carries "Refs: ${change}#N"`, `no ticket implemented yet: run ${nextCommand(change, tickets)} first`);
+    return report.items;
   }
+  report.check(`a commit carries "Refs: ${change}#N"`, true);
+  const number = Number(latest.refs.find((r) => r.startsWith(`${change}#`)).split('#')[1]);
+  const ticket = tickets.find((t) => t.number === number);
+  report.check(`latest ticket commit is Conventional Commits (${latest.subject})`, /^(feat|fix|refactor|test|docs|chore|perf|style|build|ci)(\([^)]+\))?!?: .+/.test(latest.subject), latest.subject);
+  report.check(`ticket ${change}#${number} has every box ticked`, ticket && isDone(ticket), ticket ? ticket.boxes.filter((b) => !b.done).map((b) => `${b.group}.${b.item}`).join(', ') : 'ticket not found');
+  const touched = git(`show --name-only --format= ${latest.hash}`, dir);
+  report.check('tasks.md is in the same commit as the work', touched.includes(`${change}/tasks.md`), 'tasks.md not in the commit');
+  const blockers = ticket?.blockedBy ?? [];
+  report.check(`ticket ${number} was unblocked`, blockers.every((n) => isDone(tickets.find((t) => t.number === n) ?? { boxes: [] })), `blockers not done: ${blockers.join(', ')}`);
   const next = frontier(tickets);
-  report.check(`next frontier ticket: ${next ? `${change}#${next.number} ${next.title}` : 'none, every ticket is done'}`, true);
+  report.check(`next: ${nextCommand(change, tickets)}${next ? ` (${next.title})` : ', every ticket is done'}`, true);
+  if (next && /manual/i.test(next.title)) {
+    const results = allRuns(dir, 'implement', { args: change }).map((r) => r.toolResults).join('\n');
+    for (const hook of HOOKS) {
+      report.check(`before the manual test: the ${hook} hook has fired`, results.includes(`agent-workflow ${hook}`), 'not yet: send the guardrail prompts of the plan, section 5, before the manual test');
+    }
+  }
 
   let checkCommand = '';
   try {
@@ -267,7 +289,7 @@ export function checkImplement(dir, change) {
       report.check('implement: called tdd', run.skills.includes('tdd'), `skills called: ${run.skills.join(', ') || 'none'}`);
       report.check('implement: called code-review', run.skills.includes('code-review'), `skills called: ${run.skills.join(', ') || 'none'}`);
       report.check("implement: code-review was Matt's project copy", loadedFromProject(run, 'code-review', dir), `loaded from: ${run.skillDirs.filter((d) => /code-review/.test(d)).join(', ') || 'not loaded'}`);
-      report.check('implement: review reported Standards and Spec', /Standards/.test(run.assistantText) && /\bSpec\b/.test(run.assistantText), 'no Standards / Spec sections found');
+      report.check('implement: review reported under "## Standards" and "## Spec"', hasReviewHeadings(run.assistantText), 'no "## Standards" and "## Spec" headings found');
     }
     report.check('implement: never ran git push', !run.commands.some((c) => /\bgit\b.*\bpush\b/.test(c)) || run.toolResults.includes('agent-workflow git-guard'), 'a git push ran');
     guardrailMessages(report, run, 'implement');
@@ -276,8 +298,9 @@ export function checkImplement(dir, change) {
 }
 
 // close-change run on a change with open boxes must stop at its first step.
-function checkEarlyStop(report, dir, change, open) {
+function checkEarlyStop(report, dir, change, open, tickets) {
   report.check(`${open} boxes are still open, so close-change should stop at step 1`, true);
+  report.check(`the run is not finished: next is ${nextCommand(change, tickets)}`, true);
   const subjects = commits(dir, `${baseBranch(dir)}..HEAD`).map((c) => c.subject);
   const closing = subjects.filter((s) => s.startsWith(`refactor(${change}): simplify`) || s.startsWith(`docs(${change}): archive`));
   report.check('close-change made no simplification or archive commit', closing.length === 0, closing.join(', '));
@@ -294,9 +317,10 @@ export function checkClose(dir, change) {
   onChangeBranch(report, dir, change);
   cleanTree(report, dir);
   const tasks = path.join(dir, 'openspec', 'changes', change, 'tasks.md');
-  const open = existsSync(tasks) ? parseTickets(read(dir, `openspec/changes/${change}/tasks.md`)).flatMap((t) => t.boxes).filter((b) => !b.done).length : 0;
+  const tickets = existsSync(tasks) ? parseTickets(read(dir, `openspec/changes/${change}/tasks.md`)) : [];
+  const open = tickets.flatMap((t) => t.boxes).filter((b) => !b.done).length;
   if (open) {
-    checkEarlyStop(report, dir, change, open);
+    checkEarlyStop(report, dir, change, open, tickets);
     return report.items;
   }
   report.check(`openspec/changes/${change}/ is gone`, !existsSync(path.join(dir, 'openspec', 'changes', change)), 'the change was not archived');

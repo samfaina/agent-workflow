@@ -246,6 +246,15 @@ describe('hook scripts end to end', () => {
     assert.match(result.stderr, /2 tests failed/);
   });
 
+  it('quality-gate keeps the start and the end of a long output', () => {
+    const dir = makeRepo({ checkCommand: 'node -e "console.log(\'first failure\' + \'.\'.repeat(9000) + \'summary\'); process.exit(1)"' });
+    const result = run('quality-gate.mjs', dir, { command: 'git commit -m "feat: x"' });
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /first failure/);
+    assert.match(result.stderr, /characters cut/);
+    assert.match(result.stderr, /summary/);
+  });
+
   it('quality-gate lets a commit through when the check command passes', () => {
     const dir = makeRepo({ checkCommand: 'node -e "process.exit(0)"' });
     assert.equal(run('quality-gate.mjs', dir, { command: 'git commit -m "feat: x"' }).status, 0);

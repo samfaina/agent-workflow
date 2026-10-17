@@ -38,7 +38,14 @@ What run 1 left untested live:
 
 ## Fixes after this run
 
-None applied yet. Each one names the kit document it belongs in.
+All applied on the branch `fix/second-run-findings`. Where the result differs from the proposal:
+
+- Fix 1 looks for a numbered list followed by a question, with no word list per language.
+- Fix 3 reports the missing ticket commit as `[skip]` with the command to run first, and the plan now says what a `[skip]` can mean.
+- Fix 4 also reached `templates/AGENTS.md`, the close-change skill, `docs/guide.md` and `README.md`, which all showed `/implement <change>`. A named ticket whose blocker still has open boxes now stops and names the blocker's command.
+- Fix 10 puts the guardrails in step 5 of the plan, before the last build ticket's check. Step 6 is the manual test and step 7 the close. When the next ticket is the manual test, `check implement` fails for each hook that has not fired in any `/implement` session.
+
+Each fix names the kit document it went into:
 
 1. **Checker, approval question** (row 3): in `scripts/experiment/checks.mjs`, the `to-tickets` approval check must not depend on the conversation language. Accept the Spanish label too (`/blocked by|bloquead[oa]s? por/i`), or better, look for the numbered ticket list followed by a question.
 2. **Checker, early stop** (row 5): when `check close` sees a correct early stop, add a line saying the run is not finished and naming the next frontier ticket, so eight `[ok]` lines are not read as a finished close.

@@ -20,7 +20,7 @@ Every check below must hold. When one fails, report which and stop:
 
 - `git branch --show-current` prints `change/<change>`.
 - `git status --porcelain` prints nothing.
-- `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>`; the manual test ticket counts.
+- `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>#N` for the first ticket that has one; the manual test ticket counts.
 - `openspec validate <change> --strict` says the change is valid.
 
 ### 2. Pin the diff

@@ -5,7 +5,7 @@ This guide takes you from nothing to a finished change in a project of your own.
 The kit sets up one workflow in Claude Code:
 
 ```
-/grill-with-docs → /to-spec <change> → /to-tickets <change> → /implement <change> (once per ticket) → /close-change <change>
+/grill-with-docs → /to-spec <change> → /to-tickets <change> → /implement <change>#N (once per ticket) → /close-change <change>
 ```
 
 - **Matt Pocock's skills** run the workflow: the interview, the spec, the tickets, the implementation and the code review.
@@ -166,11 +166,11 @@ In a **fresh session**, type `/to-tickets add-done-command`. Claude proposes a n
 
 Check progress at any time with `openspec list` (it shows ticked boxes out of total, such as `0/7 tasks`). `openspec status --change <change>` shows which planning documents exist, not the tickets.
 
-### 4.4 `/implement <change>`: build one ticket
+### 4.4 `/implement <change>#N`: build one ticket
 
-In a **fresh session** for every ticket, type `/implement add-done-command`. Claude picks the first ticket whose blockers are done (or the one you name with `/implement add-done-command#2`), states its title, builds it test-first, runs `code-review` on its work, ticks the ticket's boxes, and commits with `Refs: add-done-command#N`. The quality gate runs your check command before the commit.
+In a **fresh session** for every ticket, type `/implement add-done-command#1`, then `#2` and so on: `/to-tickets` lists the commands, and each ticket ends by naming the next one. Without a number, `/implement add-done-command` picks the first ticket whose blockers are done. Claude states the ticket's title, builds it test-first, runs `code-review` on its work and shows its `## Standards` and `## Spec` reports, ticks the ticket's boxes, and commits with `Refs: add-done-command#N`. The quality gate runs your check command before the commit.
 
-Repeat until the next ticket is the manual test: Claude lists its steps, you run them by hand and report the results, and Claude ticks what you confirm.
+Repeat until the next ticket is the manual test: Claude lists its steps, you run them by hand and tell Claude what you saw at each one, and Claude ticks the boxes whose result matches.
 
 ### 4.5 `/close-change <change>`: finish it
 
@@ -303,7 +303,7 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 
 **`/implement` picks the wrong ticket.** Name it: `/implement <change>#N`. Check the `Blocked by:` lines in `tasks.md`: a ticket starts only when every box of its blockers is ticked.
 
-**`/close-change` stops at "progress.remaining".** Some box in `tasks.md` is unticked, often the manual test. Run `/implement <change>` to finish it.
+**`/close-change` stops at "progress.remaining".** Some box in `tasks.md` is unticked, often the manual test. Run the `/implement <change>#N` it names to finish that ticket.
 
 **A link to `../../references/<file>.md` in a skill is broken.** Run the installer again; it downloads the shared checklists for every Addy skill installed.
 
