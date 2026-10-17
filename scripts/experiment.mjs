@@ -40,7 +40,9 @@ const [command, ...rest] = process.argv.slice(2);
 if (command === 'setup') {
   try {
     const dir = await setupTrial(rest[0] ? { dir: path.resolve(rest[0]) } : {});
-    console.log(`\nTrial project ready: ${dir}\nNext:\n  cd "${dir}"\n  claude\nThen in Claude Code:\n  ! node "${CHECKER}" check setup`);
+    // Relative to the trial folder, as docs/experiment-log.md writes it (absolute only across drives).
+    const checker = path.relative(dir, CHECKER).replace(/\\/g, '/');
+    console.log(`\nTrial project ready: ${dir}\nNext:\n  cd "${dir}"\n  claude\nThen in Claude Code:\n  ! node "${checker}" check setup`);
   } catch (error) {
     console.error(`experiment setup: ${error.message}`);
     process.exitCode = 1;

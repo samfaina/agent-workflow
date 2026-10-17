@@ -146,7 +146,7 @@ describe('transcript reading', () => {
       user('<command-name>/implement</command-name>\n<command-args>remove-todo#2</command-args>'),
       user([{ type: 'tool_result', content: 'usage: node scripts/experiment.mjs check <step> <change>' }]),
       assistant([{ type: 'text', text: 'Revisión: Spec ok, Estándares ok' }]),
-      user(' ! node E:/kit/scripts/experiment.mjs check implement remove-todo'),
+      user(' ! node ../../scripts/experiment.mjs check implement remove-todo'),
       assistant([{ type: 'text', text: '## Standards\nok\n## Spec\nok' }]),
     ]);
     const run = latestRun(projectDir, 'implement', { args: 'remove-todo', home: sent });
