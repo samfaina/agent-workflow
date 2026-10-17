@@ -152,8 +152,8 @@ openspec validate --specs --strict
 
 | Step | Result (ok / failed / partly) | Notes: what happened instead, exact messages |
 | --- | --- | --- |
-| 1. Set up | | |
-| 2. grill-with-docs + to-spec | | |
+| 1. Set up | partly | The commit and merge after the installer were not run, so the session started on `chore/install-agent-workflow` with the kit uncommitted. The commands sit in a second block after the "Answer:" paragraph and are easy to miss: merge them into one block. |
+| 2. grill-with-docs + to-spec | in progress | Before writing the change, `/to-spec` stopped and asked which branch to use: "Estás en chore/install-agent-workflow con todo el kit sin commitear... El cambio debería ir en change/remove-todo". Nothing was written before asking (correct). Gap in `docs/agents/issue-tracker.md`, **Branch**: it only covers being on a protected branch. Fix: when the current branch is not `change/<change>`, switch to it, creating it from the protected branch, and stop if the working tree has uncommitted files that do not belong to the change. |
 | 3. to-tickets | | |
 | 4. implement (per ticket) | | |
 | 4. guardrails | | |
