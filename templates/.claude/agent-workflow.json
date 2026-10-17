@@ -1,0 +1,16 @@
+{
+  "protectedBranches": ["main", "master"],
+  "allowPush": false,
+  "checkCommand": "{{CHECK_COMMAND}}",
+  "protectedPaths": [
+    ".env",
+    ".env.*",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/agent-workflow.json",
+    ".claude/hooks/**",
+    ".claude/skills/**",
+    ".claude/references/**",
+    "openspec/specs/**"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "agent-workflow",
+  "version": "0.1.0",
+  "description": "Sets up a spec-first Claude Code workflow: Matt Pocock's skills, OpenSpec storage, Addy Osmani's specialist skills.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}
