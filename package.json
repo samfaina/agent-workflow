@@ -5,6 +5,16 @@
   "type": "module",
   "license": "MIT",
   "private": true,
+  "bin": {
+    "agent-workflow": "bin/agent-workflow.js"
+  },
+  "files": [
+    "bin/",
+    "hooks/",
+    "installer/",
+    "skills/",
+    "templates/"
+  ],
   "engines": {
     "node": ">=22"
   },
