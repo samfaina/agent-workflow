@@ -4,6 +4,8 @@ The automated trial (installer, adapter by hand, hooks, archive) passed in `.san
 
 ## Runs
 
+**The experiment ended with run 4.** It passed every check with no failure, and every item that runs 1 to 3 left open passed live. What it left untested, fixes 1 and 2 of [run 4](experiments/run-4.md), changes only this plan and its checker, not what a project installs. Do not create a `run-5.md` for it. Start a new run only after a change to the kit that a project receives (a skill, a template, a hook or the installer), and say in its issue what it must cover.
+
 Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md), [run 2](experiments/run-2.md), [run 3](experiments/run-3.md) and [run 4](experiments/run-4.md) are done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy the latest `run-N.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
 
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:

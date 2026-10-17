@@ -52,4 +52,4 @@ Each fix names the kit document it goes into:
 
 **Seen, no fix proposed:** `/grill-with-docs` suggested a change name of its own (`add-remove-command`) for the second run in a row; the user picks the name when typing `/to-spec`. A stray `/mattpocock-skills:wayfinder` with no argument was declined correctly and pointed back to the workflow. `/close-change` declined the test helper that ticket 3's review had deferred to it, as out of the change's scope. The three low security findings repeat from run 3 and belong to the sample project, not the kit.
 
-**Still untested live**, for a next run: fixes 1 and 2 once applied. Every item that runs 1 to 3 left open has now passed live.
+**Still untested live:** fixes 1 and 2. Every item that runs 1 to 3 left open has now passed live, and the two fixes touch only the plan and its checker, so no run 5 is planned: the experiment ends here (see [the plan](../experiment-log.md#runs)).
