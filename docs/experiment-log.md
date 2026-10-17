@@ -1,159 +1,142 @@
 # Experiment log: first real run of the workflow
 
-The automated trial (installer, adapter by hand, hooks, archive) passed in `.sandbox/try-2026-10-17/`. What it could not test are the five user-invoked skills, which only you can start. This plan runs them for real on a fresh copy of the sample project. Record what you see in the **Results** table at the end.
+The automated trial (installer, adapter by hand, hooks, archive) passed in `.sandbox/try-2026-10-17/`. What it could not test are the five user-invoked skills, which only you can start. This plan runs them for real on a fresh copy of the sample project.
 
-The feature for the trial: a `remove <id>` command for the sample to-do CLI.
+You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
 
-## 0. Before you start
+```
+! node E:\projects\agent-workflow\scripts\experiment.mjs check <step> <change>
+```
+
+Each run is also saved to `E:\projects\agent-workflow\.sandbox\results\<trial folder>.md`, so the results can be copied into the **Results** table at the end. `[skip]` means the transcript could not be read (its format is internal to Claude Code); do that check by eye.
+
+The feature for the trial: a `remove <id>` command for the sample to-do CLI, change name `remove-todo`.
+
+## 1. Set up the trial project
+
+Skip this section if you already have a trial project with the kit committed on `main`.
 
 In PowerShell:
 
 ```powershell
-Get-ChildItem $HOME\.claude\skills -ErrorAction SilentlyContinue
+cd E:\projects\agent-workflow
+node scripts\experiment.mjs setup
 ```
 
-Check that none of these names appears there: `grill-with-docs`, `grilling`, `domain-modeling`, `to-spec`, `to-tickets`, `implement`, `tdd`, `code-review`, `codebase-design`, `close-change`. A personal skill with the same name wins over the project's copy and would spoil the trial.
-
-## 1. Set up the trial project
+It copies the sample project to `.sandbox\try-<date>`, creates the git repository, installs the kit (language Spanish, check command `npm test`, no optional skills), commits it and merges it into `main`. Then go to the folder it prints and start Claude Code:
 
 ```powershell
-cd E:\projects\agent-workflow\.sandbox
-Copy-Item -Recurse ..\examples\sample-node-cli try-real
-cd try-real
-git init -b main
-git add -A
-git commit -m "chore: initial sample project"
-git switch -c chore/install-agent-workflow
-node E:\projects\agent-workflow\bin\agent-workflow.js init
-```
-
-Answer: language `Spanish`, check command `npm test` (the default it offers), and **no** to every optional skill.
-
-```powershell
-git add -A
-git commit -m "chore: install agent-workflow"
-git switch main
-git merge --ff-only chore/install-agent-workflow
+cd E:\projects\agent-workflow\.sandbox\try-<date>
 claude
 ```
 
-Check:
+In Claude Code:
 
-- [ ] Typing `/` lists `/grill-with-docs`, `/to-spec`, `/to-tickets`, `/implement` and `/close-change`. If you also see `/mattpocock-skills:...` entries, that is your global plugin; always use the short names.
-- [ ] `/hooks` lists three hooks pointing at `.claude/hooks/agent-workflow/`.
-- [ ] Typing `/code-review` shows Matt's description ("Review the changes since a fixed point... two axes"), not Claude Code's built-in one. Press Esc without running it.
+```
+! node E:\projects\agent-workflow\scripts\experiment.mjs check setup
+```
+
+By eye:
+
+- [ ] Typing `/` lists `/grill-with-docs`, `/to-spec`, `/to-tickets`, `/implement` and `/close-change`. Entries prefixed `/mattpocock-skills:` come from your global plugin; always use the short names.
 
 ## 2. Session 1: `/grill-with-docs` and `/to-spec`
-
-In the session opened above:
 
 ```
 /grill-with-docs Add a "remove" command to the to-do CLI that deletes a to-do by its id
 ```
 
-Answer the questions (saying "yes" to a recommendation is fine). Then, in the **same session**:
+Answer the questions ("yes" to a recommendation is fine). Then, in the **same session**:
 
 ```
 /to-spec remove-todo
 ```
 
-Check (in a second PowerShell window inside `try-real`):
+Confirm the test seams when it asks. When it finishes:
 
-- [ ] The interview came in numbered rounds with a recommendation per question, in Spanish.
-- [ ] `git branch --show-current` prints `change/remove-todo`.
-- [ ] Claude asked you to confirm the test seams before writing the spec.
-- [ ] `openspec show remove-todo` prints a proposal with **Why**, **What Changes**, **Capabilities**, **Impact** and **Out of Scope**.
-- [ ] `openspec/changes/remove-todo/specs/*/spec.md` holds `### Requirement:` blocks with SHALL, each with a success scenario and error scenarios (unknown id, missing id).
-- [ ] `openspec/changes/remove-todo/design.md` has **Decisions** and **Testing Decisions**.
-- [ ] `openspec validate remove-todo --strict` says the change is valid.
-- [ ] `git log --oneline -3` shows `docs(remove-todo): publish spec`.
-- [ ] Claude did not mention labels, did not run `gh issue`, and created no `.scratch/` folder.
-- [ ] If the interview wrote `GLOSSARY.md` or `docs/adr/`, they are committed on the change branch (`git status` is clean).
+```
+! node E:\projects\agent-workflow\scripts\experiment.mjs check spec remove-todo
+```
+
+By eye:
+
+- [ ] The interview came in numbered rounds, with a recommendation per question, in Spanish.
 
 ## 3. Session 2: `/to-tickets`
 
-Type `/clear`, then:
-
 ```
+/clear
 /to-tickets remove-todo
 ```
 
-Review the proposed breakdown and approve it (or ask for changes first).
+Review the proposed breakdown and approve it (or ask for changes first). When it finishes:
 
-Check:
+```
+! node E:\projects\agent-workflow\scripts\experiment.mjs check tickets remove-todo
+```
 
-- [ ] The proposal listed each ticket with a title, **Blocked by** and what it delivers, and asked about granularity.
-- [ ] `openspec/changes/remove-todo/tasks.md` has one `## N. <title>` group per ticket, each with `Blocked by:`, `What to build:` and `- [ ] N.M` boxes that say how they are verified.
-- [ ] Tickets are vertical slices (each includes its own tests), not layers.
-- [ ] The last group is the manual test, blocked by every other ticket.
-- [ ] `openspec list` shows `remove-todo` with `0/<n> tasks`.
-- [ ] `openspec validate remove-todo --strict` passes.
-- [ ] `git log --oneline -3` shows `docs(remove-todo): publish tickets`, and `proposal.md`, the specs and `design.md` are unchanged (`git diff HEAD~1 --stat` lists only `tasks.md`).
+By eye:
+
+- [ ] Each ticket is a vertical slice you could demo on its own, not a layer such as "tests" or "setup".
 
 ## 4. Sessions 3 and on: `/implement`, one per ticket
 
-For each ticket before the manual test, type `/clear`, then:
+For each ticket, including the manual test at the end:
 
 ```
+/clear
 /implement remove-todo
 ```
 
-Check, every time:
+Confirm the seams when it asks. For the manual test ticket, Claude lists steps: run each in a PowerShell window and report the result. When it finishes:
 
-- [ ] Claude starts with `Ticket remove-todo#N: <title>`, and N is the first ticket whose blockers are done.
-- [ ] It confirms the seams and writes a failing test before the code (`tdd`).
-- [ ] At the end it runs **Matt's** `code-review`: the report has `## Standards` and `## Spec` sections, and the Spec section quotes `openspec/changes/remove-todo/`.
-- [ ] The ticket's boxes are ticked in `tasks.md` and `openspec list` shows the new count.
-- [ ] `git log -1` shows a Conventional Commits message ending with `Refs: remove-todo#N`, with `tasks.md` in the same commit (`git show --stat HEAD`).
+```
+! node E:\projects\agent-workflow\scripts\experiment.mjs check implement remove-todo
+```
 
-Once, during one of these sessions, also try the guardrails:
+The last line of the check names the next frontier ticket; when it says every ticket is done, go to step 5.
 
-- [ ] Ask Claude: "push this branch to origin". The answer quotes `agent-workflow git-guard: git push is disabled`.
-- [ ] Ask Claude: "add a line to openspec/specs" (any spec file, if one exists, or `.env`). The answer quotes `agent-workflow protected-paths`.
-- [ ] Break a test on purpose (ask Claude to change an expected value in `test/cli.test.js` and commit). The commit is stopped with `agent-workflow quality-gate`, and Claude fixes it before committing.
+Once, during one of these sessions, try the guardrails by asking Claude, one at a time:
 
-When the next ticket is the manual test, type `/clear` and run `/implement remove-todo` once more:
+1. "push this branch to origin"
+2. "add a line to .env"
+3. "change an expected value in test/cli.test.js so a test fails, and commit it"
 
-- [ ] Claude lists the manual steps and waits. Run each in your PowerShell window and report the result.
-- [ ] Only the boxes you confirmed get ticked; `openspec list` shows all tasks done.
+The next `check implement` reports each hook that fired (`git-guard`, `protected-paths`, `quality-gate`). Check by eye that Claude fixed the test before committing.
 
 ## 5. Last session: `/close-change`
 
-Type `/clear`, then:
-
 ```
+/clear
 /close-change remove-todo
 ```
 
-Check:
+It ends with `git push` and `gh pr create` commands: the trial project has no remote, so do not run them. Then:
 
-- [ ] It checks the branch, a clean working tree, all boxes ticked and `--strict` validation before doing anything else.
-- [ ] It runs `code-simplification` on the code files and commits `refactor(remove-todo): simplify` (or says nothing needed simplifying).
-- [ ] It runs `security-and-hardening` and lists findings with severity and `file:line` (or none).
-- [ ] It does **not** run `code-review` again.
-- [ ] It shows a verification table (Completeness, Correctness, Coherence) with evidence.
-- [ ] It runs `openspec archive remove-todo --yes` and commits `docs(remove-todo): archive change`.
-- [ ] It ends with the `git push` and `gh pr create` commands. The trial project has no remote, so do not run them.
-
-Then, in PowerShell:
-
-```powershell
-git log --oneline main..HEAD
-openspec list
-openspec list --specs
-openspec validate --specs --strict
+```
+! node E:\projects\agent-workflow\scripts\experiment.mjs check close remove-todo
 ```
 
-- [ ] `openspec list` shows no active changes; `openspec list --specs` shows the capability the change created or modified.
-- [ ] `openspec validate --specs --strict` passes.
-- [ ] `git status` is clean, and nothing in `.claude/skills/` changed during the trial (`git log --oneline -- .claude/skills` shows only the installation commit).
+By eye:
+
+- [ ] The security findings it listed (if any) make sense for the code.
+
+## What the checker covers
+
+| Step | Checked automatically |
+| --- | --- |
+| setup | git repository, installation commit on `main`, clean tree, every core skill and `close-change` installed, no excluded or `/opsx` skills, hooks wired and present, every `../../references/` link resolves, no personal skill shadowing a workflow skill |
+| spec | branch `change/<change>`, clean tree, proposal sections, SHALL/MUST requirements with error scenarios, design sections, `--strict` validation, the publish commit, no `.scratch/`, no labels; from the transcript: grilling and domain-modeling called, project copies used, seams asked, no `gh issue` |
+| tickets | ticket format (numbering, `Blocked by:`, `What to build:`, `N.M` boxes, dependency order, manual test last and blocked by all), `openspec list` count, `--strict` validation, publish commit touching only `tasks.md`; from the transcript: breakdown approved, no `gh issue` |
+| implement | `Refs: <change>#N` commit in Conventional Commits with `tasks.md`, the ticket's boxes ticked, it was unblocked, check command passes, next frontier; from the transcript: "Ticket ..." line, tdd and **Matt's** code-review called from the project copy, Standards and Spec sections, no `git push`, hooks that fired |
+| close | change archived, living spec valid, archive commit, no skill or checklist changed; from the transcript: code-simplification and security-and-hardening called, code-review not called, verification table, `openspec archive`, push and PR commands at the end |
 
 ## Results
 
 | Step | Result (ok / failed / partly) | Notes: what happened instead, exact messages |
 | --- | --- | --- |
-| 1. Set up | partly | The commit and merge after the installer were not run, so the session started on `chore/install-agent-workflow` with the kit uncommitted. The commands sit in a second block after the "Answer:" paragraph and are easy to miss: merge them into one block. |
-| 2. grill-with-docs + to-spec | in progress | Before writing the change, `/to-spec` stopped and asked which branch to use: "Estás en chore/install-agent-workflow con todo el kit sin commitear... El cambio debería ir en change/remove-todo". Nothing was written before asking (correct). Gap in `docs/agents/issue-tracker.md`, **Branch**: it only covers being on a protected branch. Fix: when the current branch is not `change/<change>`, switch to it, creating it from the protected branch, and stop if the working tree has uncommitted files that do not belong to the change. |
+| 1. Set up | partly | The commit and merge after the installer were not run, so the session started on `chore/install-agent-workflow` with the kit uncommitted. The commands sat in a second block after the "Answer:" paragraph and were easy to miss. Replaced by `node scripts/experiment.mjs setup`. Checker afterwards: 10 ok. |
+| 2. grill-with-docs + to-spec | partly | Before writing the change, `/to-spec` stopped and asked which branch to use: "Estás en chore/install-agent-workflow con todo el kit sin commitear... El cambio debería ir en change/remove-todo". Nothing was written before asking (correct). Gap in `docs/agents/issue-tracker.md`, **Branch**: it only covers being on a protected branch. Fix: when the current branch is not `change/<change>`, switch to it, creating it from the protected branch, and stop if the working tree has uncommitted files that do not belong to the change. After the branch was sorted out, checker: 17 ok. |
 | 3. to-tickets | | |
 | 4. implement (per ticket) | | |
 | 4. guardrails | | |
