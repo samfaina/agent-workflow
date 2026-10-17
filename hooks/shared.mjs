@@ -270,6 +270,78 @@ export function checkCommand(command, { config, cwd, getBranch = currentBranch }
 }
 
 // ---------------------------------------------------------------------------
+// Shell writes
+
+const REDIRECT = /^(?:\d|\*)?>>?\|?(.*)$/;
+const PS_PATH_PARAMS = new Set(['-path', '-literalpath', '-filepath', '-destination']);
+// Which positional arguments each program writes, moves or deletes.
+const WRITERS = {
+  tee: 'all', touch: 'all', rm: 'all', rmdir: 'all', del: 'all', erase: 'all', rd: 'all',
+  cp: 'last', copy: 'last', mv: 'all', move: 'all', ren: 'all',
+  'set-content': 'first', sc: 'first', 'add-content': 'first', ac: 'first', 'clear-content': 'all', clc: 'all',
+  'out-file': 'first', 'new-item': 'first', ni: 'first', 'remove-item': 'all', ri: 'all',
+  'copy-item': 'last', cpi: 'last', 'move-item': 'all', mi: 'all', 'rename-item': 'first', rni: 'first',
+};
+
+function writtenByProgram(program, args) {
+  const targets = [];
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const lower = arg.toLowerCase();
+    if (PS_PATH_PARAMS.has(lower)) {
+      if (args[i + 1] !== undefined) targets.push(args[++i]);
+    } else if (/^-(value|itemtype|encoding|newname)$/i.test(arg)) {
+      i++;
+    } else if (!arg.startsWith('-')) {
+      positional.push(arg);
+    }
+  }
+  if (program === 'sed') return args.some((a) => a === '-i' || a.startsWith('--in-place') || /^-[a-z]*i/.test(a)) ? positional.slice(1) : [];
+  const which = WRITERS[program];
+  if (which === 'all') targets.push(...positional);
+  if (which === 'first' && positional.length) targets.push(positional[0]);
+  if (which === 'last' && positional.length > 1) targets.push(positional.at(-1));
+  return targets;
+}
+
+// Paths a command line writes, moves or deletes, as far as a static read can
+// tell: redirections, tee, cp/mv/rm/touch, sed -i and PowerShell's file cmdlets.
+export function shellWriteTargets(command) {
+  const targets = [];
+  for (const tokens of splitCommands(command)) {
+    let start = 0;
+    while (start < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[start]) || WRAPPERS.has(programName(tokens[start])))) start++;
+    if (start >= tokens.length) continue;
+    // A nested command line (`bash -c "..."`, `Invoke-Expression "..."`) is read on its own.
+    const program = programName(tokens[start]);
+    let nestedAt = -1;
+    if (SHELLS.has(program)) {
+      const flagAt = tokens.findIndex((t, j) => j > start && SHELL_COMMAND_FLAGS.has(t.toLowerCase()));
+      if (flagAt !== -1 && flagAt + 1 < tokens.length) nestedAt = flagAt + 1;
+    } else if (EVALUATORS.has(program) && start + 1 < tokens.length) {
+      nestedAt = start + 1;
+    }
+    if (nestedAt !== -1) targets.push(...shellWriteTargets(tokens[nestedAt]));
+
+    const rest = [];
+    for (let i = start; i < tokens.length; i++) {
+      if (i === nestedAt) continue;
+      const at = tokens[i].search(/(?:\d|\*)?>/);
+      if (at === -1) {
+        rest.push(tokens[i]);
+        continue;
+      }
+      if (at > 0) rest.push(tokens[i].slice(0, at));
+      const target = tokens[i].slice(at).match(REDIRECT)?.[1].trim() || tokens[++i];
+      if (target) targets.push(target);
+    }
+    if (nestedAt === -1 && rest.length) targets.push(...writtenByProgram(program, rest.slice(1)));
+  }
+  return targets.filter((t) => t && !t.startsWith('$') && !t.startsWith('&') && t !== '/dev/null' && t.toLowerCase() !== 'nul');
+}
+
+// ---------------------------------------------------------------------------
 // Protected paths
 
 // Gitignore-like globs: `**` crosses folders, `*` and `?` stay within one, and
