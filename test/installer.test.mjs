@@ -1,10 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { skillsWhere } from '../installer/catalog.mjs';
-import { init } from '../installer/init.mjs';
+import { init, KIT_ROOT } from '../installer/init.mjs';
 import { sharedReferenceLinks } from '../installer/references.mjs';
 
 const KIT_HOOKS = JSON.parse(readFileSync(new URL('../templates/.claude/settings.json', import.meta.url), 'utf8')).hooks.PreToolUse;
@@ -54,10 +56,10 @@ function quietIO(answer = false) {
   };
 }
 
-async function install(projectDir, { answer = false, optional = 'none' } = {}) {
+async function install(projectDir, { answer = false, optional = 'none', initFrom = init } = {}) {
   const tools = fakeTools(projectDir);
   const io = quietIO(answer);
-  await init({
+  await initFrom({
     projectDir,
     io,
     run: tools.run,
@@ -187,5 +189,28 @@ describe('installer in an existing project', () => {
     const scripts = (list, matcher) => list.filter((g) => g.matcher === matcher).flatMap((g) => g.hooks.map((h) => path.basename(h.args[0]))).sort();
     assert.equal(groups.length, KIT_HOOKS.length, 'no duplicate groups');
     for (const { matcher } of KIT_HOOKS) assert.deepEqual(scripts(groups, matcher), scripts(KIT_HOOKS, matcher), matcher);
+  });
+});
+
+// `npx github:...` runs the kit from the packed package, not from a clone.
+describe('installer from the published package', () => {
+  const pack = spawnSync('npm pack --dry-run --json', { cwd: KIT_ROOT, shell: true, encoding: 'utf8' });
+  const packed = JSON.parse(pack.stdout)[0].files.map((f) => f.path);
+
+  it('exposes the CLI as the package binary', () => {
+    const { name, bin } = JSON.parse(read(KIT_ROOT, 'package.json'));
+    assert.equal(bin?.[name], 'bin/agent-workflow.js', 'npx runs the binary named after the package');
+    assert.ok(packed.includes(bin[name]));
+  });
+
+  it('installs the kit from the packed files alone', async () => {
+    const kit = mkdtempSync(path.join(tmpdir(), 'aw-package-'));
+    for (const file of packed) cpSync(path.join(KIT_ROOT, file), path.join(kit, file));
+    const packedInit = (await import(pathToFileURL(path.join(kit, 'installer', 'init.mjs')))).init;
+    const dir = newProject();
+    await install(dir, { initFrom: packedInit });
+    for (const file of ['.claude/skills/close-change/SKILL.md', '.claude/hooks/agent-workflow/shared.mjs', 'openspec/config.yaml', 'AGENTS.md']) {
+      assert.ok(existsSync(path.join(dir, file)), file);
+    }
   });
 });

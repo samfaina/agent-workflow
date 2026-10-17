@@ -26,7 +26,7 @@ Install these once per machine. The commands are for PowerShell on Windows; they
    ```powershell
    git --version
    ```
-3. **GitHub CLI** from <https://cli.github.com>, then sign in and let Git use those credentials (needed to install the kit from its private repository):
+3. **GitHub CLI** from <https://cli.github.com>, then sign in and let Git use those credentials (needed to push branches and open pull requests):
    ```powershell
    gh --version
    gh auth login
@@ -60,11 +60,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    ```powershell
    npx github:samfaina/agent-workflow init
    ```
-   If `npx` cannot reach the private repository, clone the kit once and run it from the clone instead:
-   ```powershell
-   gh repo clone samfaina/agent-workflow $HOME\agent-workflow
-   node $HOME\agent-workflow\bin\agent-workflow.js init
-   ```
+   `npx` downloads the kit from GitHub into npm's cache and runs it from there: you need no clone and no GitHub sign-in. The first time, it asks whether to install the package; answer `y`, or put `--yes` after `npx`. To try a branch of the kit before it reaches `main`, add `#<branch>` to the repository: `npx github:samfaina/agent-workflow#<branch> init`.
 4. Answer the questions:
    - **Language**: the language Claude talks to you in. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
    - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. Leave it empty if the project has no checks yet; you can set it later in `.claude/agent-workflow.json`.
@@ -313,6 +309,6 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 
 **The installer cannot download a checklist.** It prints the URL; download the file by hand into `.claude/references/`.
 
-**`npx github:samfaina/agent-workflow` fails with an authentication error.** Run `gh auth login` and `gh auth setup-git`, or use the clone method in section 2, step 3.
+**`npx github:samfaina/agent-workflow` fails with `npm error could not determine executable to run`.** The version of the kit that npx downloaded has no `bin` entry in its `package.json`, so you named a branch or commit from before the kit could run with npx. Run it from `main`, without `#<branch>`.
 
 **I want to undo the installation.** It is all in files: delete the `agent-workflow` blocks from `AGENTS.md` and `CLAUDE.md`, the `hooks` entries pointing at `.claude/hooks/agent-workflow/` from `.claude/settings.json`, and the folders and files listed in "What the installer creates". `git` shows exactly what the installation added.
