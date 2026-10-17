@@ -42,6 +42,7 @@ export async function init({
   language,
   checkCommand,
   optional,
+  nextSteps = true,
 }) {
   const ctx = { io, projectDir };
   const claudeDir = path.join(projectDir, '.claude');
@@ -131,7 +132,7 @@ export async function init({
   await writeBlockSafely(path.join(projectDir, 'CLAUDE.md'), claude, ctx);
   warnAboutOldAgentSkillsBlock(ctx);
 
-  io.log(`
+  if (nextSteps) io.log(`
 Done. Next steps:
   1. Review the changes with \`git status\` and commit them on a branch.
   2. Restart Claude Code in this folder so it loads the new skills and hooks.
