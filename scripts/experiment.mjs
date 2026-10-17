@@ -5,12 +5,12 @@
 //   node <kit>/scripts/experiment.mjs check <step> [change]   run inside the trial project after a step
 //
 // Steps: setup, spec, tickets, implement, close. Results are printed and appended
-// to .sandbox/results/<trial folder>.md in the kit.
+// to .sandbox/results/run-N.md in the kit, where N comes from the trial folder .sandbox/run-N.
 import { appendFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { KIT_ROOT } from '../installer/init.mjs';
 import { checkClose, checkImplement, checkSetup, checkSpec, checkTickets } from './experiment/checks.mjs';
-import { setupTrial } from './experiment/setup.mjs';
+import { resultsName, setupTrial } from './experiment/setup.mjs';
 
 const STEPS = { setup: checkSetup, spec: checkSpec, tickets: checkTickets, implement: checkImplement, close: checkClose };
 const MARK = { ok: '[ok]  ', fail: '[FAIL]', skip: '[skip]' };
@@ -29,9 +29,9 @@ Run "check" from inside the trial project, for example in Claude Code:
 function record(dir, step, change, items) {
   const resultsDir = path.join(KIT_ROOT, '.sandbox', 'results');
   mkdirSync(resultsDir, { recursive: true });
-  const file = path.join(resultsDir, `${path.basename(dir)}.md`);
+  const file = path.join(resultsDir, `${resultsName(dir)}.md`);
   const lines = items.map((i) => `- ${MARK[i.status].trim()} ${i.label}${i.detail ? `: ${i.detail.split('\n')[0]}` : ''}`);
-  appendFileSync(file, `\n## ${step}${change ? ` ${change}` : ''} (${new Date().toISOString()})\n\n${lines.join('\n')}\n`);
+  appendFileSync(file, `\n## ${step}${change ? ` ${change}` : ''} (${path.basename(dir)}, ${new Date().toISOString()})\n\n${lines.join('\n')}\n`);
   return file;
 }
 

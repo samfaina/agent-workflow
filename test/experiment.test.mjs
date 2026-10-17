@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { currentRun, nextTrialDir, resultsName } from '../scripts/experiment/setup.mjs';
 import { frontier, isDone, parseTickets } from '../scripts/experiment/tickets.mjs';
 import { latestRun, loadedFromProject, transcriptDir } from '../scripts/experiment/transcript.mjs';
 
@@ -56,6 +57,33 @@ describe('tasks.md parsing', () => {
   it('treats a group without Blocked by as blocked by the previous group', () => {
     const legacy = parseTickets('## 1. Setup\n\n- [ ] 1.1 a\n\n## 2. Core\n\n- [ ] 2.1 b\n');
     assert.equal(frontier(legacy).number, 1);
+  });
+});
+
+describe('run naming', () => {
+  function fakeKit(runFiles, trialDirs = []) {
+    const root = mkdtempSync(path.join(tmpdir(), 'aw-kit-'));
+    mkdirSync(path.join(root, 'docs', 'experiments'), { recursive: true });
+    for (const f of runFiles) writeFileSync(path.join(root, 'docs', 'experiments', f), '');
+    for (const d of trialDirs) mkdirSync(path.join(root, '.sandbox', d), { recursive: true });
+    return root;
+  }
+
+  it('takes the run from the highest docs/experiments/run-N.md', () => {
+    assert.equal(currentRun(fakeKit(['run-1.md', 'run-2.md', 'run-10.md', 'notes.md'])), 10);
+    assert.equal(currentRun(mkdtempSync(path.join(tmpdir(), 'aw-kit-'))), 1);
+  });
+
+  it('names the trial folder after the run, and numbers repeated trials', () => {
+    const root = fakeKit(['run-2.md'], ['run-2']);
+    assert.equal(nextTrialDir(2, root), path.join(root, '.sandbox', 'run-2-2'));
+    assert.equal(nextTrialDir(3, root), path.join(root, '.sandbox', 'run-3'));
+  });
+
+  it('saves every trial of a run to one results file', () => {
+    assert.equal(resultsName('/kit/.sandbox/run-2'), 'run-2');
+    assert.equal(resultsName('/kit/.sandbox/run-2-3'), 'run-2');
+    assert.equal(resultsName('/kit/.sandbox/try-2026-10-17'), 'try-2026-10-17');
   });
 });
 
