@@ -72,7 +72,7 @@ What to build: the end-to-end behaviour this ticket makes work, from the user's 
 ```
 
 - A ticket is a vertical slice: a narrow path through every layer it touches, demoable or verifiable on its own, sized for one session.
-- `Blocked by:` lists ticket numbers (`Blocked by: 1, 3`) or says `Blocked by: none`.
+- `Blocked by:` lists ticket numbers (`Blocked by: 1, 3`) or says `Blocked by: none`. A group with no `Blocked by:` line, written before this repo used tickets, is blocked by the group before it.
 - Checkboxes `- [ ] N.M` hold the acceptance criteria and nothing else; each one says how it is verified. OpenSpec counts these boxes as the change's progress.
 - Each ticket includes the tests and docs its own work needs.
 - No file paths or code snippets, as the skills already ask.
