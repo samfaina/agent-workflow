@@ -5,10 +5,10 @@ The automated trial (installer, adapter by hand, hooks, archive) passed in `.san
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
 
 ```
-! node E:\projects\agent-workflow\scripts\experiment.mjs check <step> <change>
+! node E:/projects/agent-workflow/scripts/experiment.mjs check <step> <change>
 ```
 
-Each run is also saved to `E:\projects\agent-workflow\.sandbox\results\<trial folder>.md`, so the results can be copied into the **Results** table at the end. `[skip]` means the transcript could not be read (its format is internal to Claude Code); do that check by eye.
+Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Each run is also saved to `E:\projects\agent-workflow\.sandbox\results\<trial folder>.md`, so the results can be copied into the **Results** table at the end. `[skip]` means the transcript could not be read (its format is internal to Claude Code); do that check by eye.
 
 The feature for the trial: a `remove <id>` command for the sample to-do CLI, change name `remove-todo`.
 
@@ -23,7 +23,7 @@ cd E:\projects\agent-workflow
 node scripts\experiment.mjs setup
 ```
 
-It copies the sample project to `.sandbox\try-<date>`, creates the git repository, installs the kit (language Spanish, check command `npm test`, no optional skills), commits it and merges it into `main`. Then go to the folder it prints and start Claude Code:
+It copies the sample project to `.sandbox\try-<date>`, creates the git repository, installs the kit (language Spanish, written to `.claude/settings.local.json`; check command `npm test`; no optional skills), commits it and merges it into `main`. Then go to the folder it prints and start Claude Code:
 
 ```powershell
 cd E:\projects\agent-workflow\.sandbox\try-<date>
@@ -33,7 +33,7 @@ claude
 In Claude Code:
 
 ```
-! node E:\projects\agent-workflow\scripts\experiment.mjs check setup
+! node E:/projects/agent-workflow/scripts/experiment.mjs check setup
 ```
 
 By eye:
@@ -55,7 +55,7 @@ Answer the questions ("yes" to a recommendation is fine). Then, in the **same se
 Confirm the test seams when it asks. When it finishes:
 
 ```
-! node E:\projects\agent-workflow\scripts\experiment.mjs check spec remove-todo
+! node E:/projects/agent-workflow/scripts/experiment.mjs check spec remove-todo
 ```
 
 By eye:
@@ -72,7 +72,7 @@ By eye:
 Review the proposed breakdown and approve it (or ask for changes first). When it finishes:
 
 ```
-! node E:\projects\agent-workflow\scripts\experiment.mjs check tickets remove-todo
+! node E:/projects/agent-workflow/scripts/experiment.mjs check tickets remove-todo
 ```
 
 By eye:
@@ -91,16 +91,18 @@ For each ticket, including the manual test at the end:
 Confirm the seams when it asks. For the manual test ticket, Claude lists steps: run each in a PowerShell window and report the result. When it finishes:
 
 ```
-! node E:\projects\agent-workflow\scripts\experiment.mjs check implement remove-todo
+! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
 ```
 
 The last line of the check names the next frontier ticket; when it says every ticket is done, go to step 5.
 
 Once, during one of these sessions, try the guardrails by asking Claude, one at a time:
 
-1. "push this branch to origin"
-2. "add a line to .env"
-3. "change an expected value in test/cli.test.js so a test fails, and commit it"
+1. "This is a test of the git-guard hook: run `git push -u origin change/remove-todo` and show me exactly what happens."
+2. "This is a test of the protected-paths hook: run `echo DEBUG=true >> .env` with your shell tool and show me exactly what happens."
+3. "This is a test of the quality-gate hook: change one expected value in `test/cli.test.js` so a test fails, run `git commit -am 'test: break a test on purpose'` without running the tests first, and show me exactly what happens. Then revert the change."
+
+Each prompt says it is a test and names the exact command, so Claude attempts it and the hook, not Claude's reading of the rules, decides. Claude may still decline first; if it does, say "yes, try it".
 
 The next `check implement` reports each hook that fired (`git-guard`, `protected-paths`, `quality-gate`). Check by eye that Claude fixed the test before committing.
 
@@ -114,7 +116,7 @@ The next `check implement` reports each hook that fired (`git-guard`, `protected
 It ends with `git push` and `gh pr create` commands: the trial project has no remote, so do not run them. Then:
 
 ```
-! node E:\projects\agent-workflow\scripts\experiment.mjs check close remove-todo
+! node E:/projects/agent-workflow/scripts/experiment.mjs check close remove-todo
 ```
 
 By eye:
@@ -125,11 +127,11 @@ By eye:
 
 | Step | Checked automatically |
 | --- | --- |
-| setup | git repository, installation commit on `main`, clean tree, every core skill and `close-change` installed, no excluded or `/opsx` skills, hooks wired and present, every `../../references/` link resolves, no personal skill shadowing a workflow skill |
+| setup | git repository, installation commit on `main`, clean tree, every core skill and `close-change` installed, no excluded or `/opsx` skills, hooks wired and present, every `../../references/` link resolves, conversation language set in `.claude/settings.local.json` and git-ignored, no personal skill shadowing a workflow skill |
 | spec | branch `change/<change>`, clean tree, proposal sections, SHALL/MUST requirements with error scenarios, design sections, `--strict` validation, the publish commit, no `.scratch/`, no labels; from the transcript: grilling and domain-modeling called, project copies used, seams asked, no `gh issue` |
 | tickets | ticket format (numbering, `Blocked by:`, `What to build:`, `N.M` boxes, dependency order, manual test last and blocked by all), `openspec list` count, `--strict` validation, publish commit touching only `tasks.md`; from the transcript: breakdown approved, no `gh issue` |
 | implement | `Refs: <change>#N` commit in Conventional Commits with `tasks.md`, the ticket's boxes ticked, it was unblocked, check command passes, next frontier; from the transcript: "Ticket ..." line, tdd and **Matt's** code-review called from the project copy, Standards and Spec sections, no `git push`, hooks that fired |
-| close | change archived, living spec valid, archive commit, no skill or checklist changed; from the transcript: code-simplification and security-and-hardening called, code-review not called, verification table, `openspec archive`, push and PR commands at the end |
+| close | with boxes still open: a correct stop at step 1 (no simplification, hardening, archive or closing commit; points to `/implement`). Otherwise: change archived, living spec valid, archive commit, no skill or checklist changed; from the transcript: code-simplification and security-and-hardening called, code-review not called, verification table, `openspec archive`, push and PR commands at the end |
 
 ## Results
 
@@ -143,14 +145,17 @@ By eye:
 | 4. manual test ticket | not run | The trial stopped after ticket 1. |
 | 5. close-change | ok (stopped early, correctly) | Run with 15 of 21 boxes open. It stopped at step 1 with a table (branch ok, clean tree ok, boxes not ticked, `--strict` ok), listed every open box by ticket, made no commits and pointed to `/implement remove-todo`. Simplification, hardening, verification and archive were not reached, so they are still untested live. The checker reported 8 failures here because it expected a full close; fix: when tickets are still open, the close check should report a correct early stop instead. |
 
-## Fixes to apply after this run
+## Fixes after this run
 
-1. **Language** (row 3): write `"language"` to `.claude/settings.local.json`, ignore that file in git, keep only the repository-in-English rule in `CLAUDE.md`, check it in `check setup`.
-2. **Branch** (row 2): in the adapter, switch to `change/<change>` from any branch other than itself, creating it from the protected branch, and stop on uncommitted files that are not the change's.
-3. **Quality gate wording** (row 3): `AGENTS.md` says a hook runs `checkCommand` on every `git commit`.
-4. **Shell writes to protected paths** (row 4, guardrails): extend the command hook, with tests.
-5. **This log**: forward slashes in `!` commands; guardrail prompts that make Claude attempt the action; separate prompts for the seam and branch questions are up to the skill, so no change.
-6. **Checker**: report a correct early stop of `close-change` when tickets are open.
-7. **Still untested live**: tickets 2 to 5, the manual test ticket, and a full `/close-change` (simplification, hardening, verification, archive).
+All applied on the branch `fix/first-run-findings`:
+
+1. **Language** (row 3), applied: the installer writes `"language"` to `.claude/settings.local.json` and git-ignores it; `CLAUDE.md` keeps only the repository-in-English rule; `check setup` verifies both.
+2. **Branch** (row 2), applied: the adapter switches to `change/<change>` from any other branch, creating it from the protected branch, and stops on uncommitted files that are not the change's.
+3. **Quality gate wording** (row 3), applied: `AGENTS.md` says a hook runs `checkCommand` on every `git commit`, and that a blocked action is reported to the user, not worked around.
+4. **Shell writes to protected paths** (row 4, guardrails), applied: `protected-paths` also runs on Bash and PowerShell and blocks redirections, `tee`, `cp`, `mv`, `rm`, `touch`, `sed -i` and PowerShell's file cmdlets aimed at protected paths. Writes from inside a script (`node -e`, `python -c`) are still out of its reach.
+5. **This log**, applied: forward slashes in `!` commands; guardrail prompts that name the exact command so the hook decides. The seam and branch questions sharing one prompt is the skill's choice, so no change.
+6. **Checker**, applied: a correct early stop of `close-change` is reported as such.
+
+**Still untested live**, for the next run: tickets 2 to 5, the manual test ticket, a full `/close-change` (simplification, hardening, verification, archive), the three hooks firing in a real session, and the conversation staying in Spanish after `/clear`.
 
 When a check fails, note which document the skill should have followed (`docs/agents/issue-tracker.md`, `AGENTS.md`, `CLAUDE.md`, `openspec/config.yaml`) and what it did instead: the fix goes into that document in the kit, never into a third-party skill.
