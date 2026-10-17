@@ -275,10 +275,30 @@ export function checkImplement(dir, change) {
   return report.items;
 }
 
+// close-change run on a change with open boxes must stop at its first step.
+function checkEarlyStop(report, dir, change, open) {
+  report.check(`${open} boxes are still open, so close-change should stop at step 1`, true);
+  const subjects = commits(dir, `${baseBranch(dir)}..HEAD`).map((c) => c.subject);
+  const closing = subjects.filter((s) => s.startsWith(`refactor(${change}): simplify`) || s.startsWith(`docs(${change}): archive`));
+  report.check('close-change made no simplification or archive commit', closing.length === 0, closing.join(', '));
+  withRun(report, dir, 'close-change', change, 'close-change transcript', (run) => {
+    report.check('close-change: ran from the project copy', loadedFromProject(run, 'close-change', dir), `loaded from: ${run.skillDirs[0] ?? 'unknown'}`);
+    report.check('close-change: stopped before simplifying or hardening', !run.skills.includes('code-simplification') && !run.skills.includes('security-and-hardening'), `skills called: ${run.skills.join(', ')}`);
+    report.check('close-change: did not archive', !run.commands.some((c) => c.includes('openspec archive')), 'openspec archive ran');
+    report.check('close-change: pointed you to /implement', run.assistantText.includes(`/implement ${change}`), `no mention of /implement ${change}`);
+  });
+}
+
 export function checkClose(dir, change) {
   const report = new Report();
   onChangeBranch(report, dir, change);
   cleanTree(report, dir);
+  const tasks = path.join(dir, 'openspec', 'changes', change, 'tasks.md');
+  const open = existsSync(tasks) ? parseTickets(read(dir, `openspec/changes/${change}/tasks.md`)).flatMap((t) => t.boxes).filter((b) => !b.done).length : 0;
+  if (open) {
+    checkEarlyStop(report, dir, change, open);
+    return report.items;
+  }
   report.check(`openspec/changes/${change}/ is gone`, !existsSync(path.join(dir, 'openspec', 'changes', change)), 'the change was not archived');
   const archive = path.join(dir, 'openspec', 'changes', 'archive');
   const archived = existsSync(archive) && readdirSync(archive).some((d) => d.endsWith(`-${change}`));
