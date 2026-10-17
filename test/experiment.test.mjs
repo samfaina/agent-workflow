@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { currentRun, nextTrialDir, resultsName } from '../scripts/experiment/setup.mjs';
 import { frontier, isDone, parseTickets } from '../scripts/experiment/tickets.mjs';
-import { latestRun, loadedFromProject, transcriptDir } from '../scripts/experiment/transcript.mjs';
+import { allRuns, latestRun, loadedFromProject, transcriptDir } from '../scripts/experiment/transcript.mjs';
+import { asksAfterList, hasReviewHeadings, nextCommand } from '../scripts/experiment/checks.mjs';
 
 const TASKS = `# Tasks
 
@@ -126,5 +127,47 @@ describe('transcript reading', () => {
   it('returns null when the command never ran', () => {
     assert.equal(latestRun(projectDir, 'close-change', { home }), null);
     assert.equal(latestRun(path.resolve('/nowhere'), 'implement', { home }), null);
+  });
+
+  it('ends a run at the first checker run, so the reply to it does not count', () => {
+    const checked = fakeHome(projectDir, [
+      user('<command-name>/implement</command-name>\n<command-args>remove-todo#2</command-args>'),
+      assistant([{ type: 'text', text: 'Revisión: Spec ok, Estándares ok' }]),
+      user('<bash-input> node E:/kit/scripts/experiment.mjs check implement remove-todo</bash-input>'),
+      assistant([{ type: 'text', text: '## Standards\nok\n## Spec\nok' }]),
+    ]);
+    const run = latestRun(projectDir, 'implement', { args: 'remove-todo', home: checked });
+    assert.match(run.assistantText, /Revisión/);
+    assert.doesNotMatch(run.assistantText, /## Standards/);
+  });
+
+  it('lists every run of a command, oldest first', () => {
+    const twice = fakeHome(projectDir, [
+      user('<command-name>/implement</command-name>\n<command-args>remove-todo#1</command-args>', '2026-10-17T10:00:00Z'),
+      user([{ type: 'tool_result', content: 'agent-workflow git-guard: git push is disabled.' }]),
+      user('<command-name>/implement</command-name>\n<command-args>remove-todo#2</command-args>', '2026-10-17T11:00:00Z'),
+    ]);
+    const runs = allRuns(projectDir, 'implement', { args: 'remove-todo', home: twice });
+    assert.deepEqual(runs.map((r) => r.args), ['remove-todo#1', 'remove-todo#2']);
+    assert.match(runs[0].toolResults, /git-guard/);
+  });
+});
+
+describe('check helpers', () => {
+  it('names the next ticket, or the close when every ticket is done', () => {
+    assert.equal(nextCommand('remove-todo', parseTickets(TASKS)), '/implement remove-todo#2');
+    assert.equal(nextCommand('remove-todo', parseTickets(TASKS.replace(/- \[ \]/g, '- [x]'))), '/close-change remove-todo');
+  });
+
+  it('finds a numbered breakdown followed by a question in any language', () => {
+    assert.equal(asksAfterList('**1. Eliminar un to-do**\n- **Bloqueado por:** ninguno\n\n¿Te parece bien la granularidad?'), true);
+    assert.equal(asksAfterList('1. Remove a to-do\nBlocked by: none\n\nDoes this breakdown work?'), true);
+    assert.equal(asksAfterList('1. Remove a to-do\nPublished.'), false);
+  });
+
+  it('wants the literal review headings, not the words alone', () => {
+    assert.equal(hasReviewHeadings('## Standards\nok\n\n## Spec\nok'), true);
+    assert.equal(hasReviewHeadings('**Revisión:**\n- **Spec:** ok\n- **Standards:** ok'), false);
+    assert.equal(hasReviewHeadings('## Estándares\nok\n## Spec\nok'), false);
   });
 });

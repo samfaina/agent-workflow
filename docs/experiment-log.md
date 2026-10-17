@@ -4,7 +4,7 @@ The automated trial (installer, adapter by hand, hooks, archive) passed in `.san
 
 ## Runs
 
-Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md) is done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy `run-2.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
+Each run has its own file in [`docs/experiments/`](experiments/): [run 1](experiments/run-1.md) and [run 2](experiments/run-2.md) are done, and the file to fill in is the highest-numbered `run-N.md`. If that file already has results, create the next one first (copy `run-2.md` with its **Results** table emptied, and list under **Must cover** what the previous run left untested), because `setup` takes the run number from the highest file.
 
 You stay in **one Claude Code window**. After each step, a checker reads the project, OpenSpec and the session transcript, and prints `[ok]`, `[FAIL]` or `[skip]` for every check. Run it from Claude Code with the `!` prefix, which runs a shell command without leaving the session:
 
@@ -12,7 +12,7 @@ You stay in **one Claude Code window**. After each step, a checker reads the pro
 ! node E:/projects/agent-workflow/scripts/experiment.mjs check <step> <change>
 ```
 
-Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means the transcript could not be read (its format is internal to Claude Code); do that check by eye, and note the by-eye checks in the run's file too.
+Keep the forward slashes: `!` runs the command in Git Bash, which drops backslashes. Every check is also appended to `E:\projects\agent-workflow\.sandbox\results\run-N.md` (the run of the trial folder `.sandbox\run-N`), so the results can be copied into the **Results** table of `docs/experiments/run-N.md`. `[skip]` means there is nothing to check yet (the detail says what to run first) or the transcript could not be read (its format is internal to Claude Code); in the second case do that check by eye, and note the by-eye checks in the run's file too.
 
 The feature for the trial: a `remove <id>` command for the sample to-do CLI, change name `remove-todo`.
 
@@ -83,24 +83,26 @@ By eye:
 
 - [ ] Each ticket is a vertical slice you could demo on its own, not a layer such as "tests" or "setup".
 
-## 4. Sessions 3 and on: `/implement`, one per ticket
+## 4. Sessions 3 and on: `/implement`, one per build ticket
 
-For each ticket, including the manual test at the end:
+`/to-tickets` ends with one command per ticket. For each build ticket N, in order:
 
 ```
 /clear
-/implement remove-todo
+/implement remove-todo#N
 ```
 
-Confirm the seams when it asks. For the manual test ticket, Claude lists steps: run each in a PowerShell window and report the result. When it finishes:
+Confirm the seams when it asks. When it finishes, and before anything else in the session:
 
 ```
 ! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
 ```
 
-The last line of the check names the next frontier ticket; when it says every ticket is done, go to step 5.
+Run the check once per ticket, after Claude's last message about it. The checker reads the session only up to the first check you type, so what Claude says about the check's output does not count. Its `next:` line gives the command for the following ticket. When that is the manual test, the last build ticket's session first goes through step 5.
 
-Once, during one of these sessions, try the guardrails by asking Claude, one at a time:
+## 5. Guardrails, in the last build ticket's session
+
+In the session of the last build ticket, after Claude has committed it and **before** you run its `check implement`, ask Claude, one at a time:
 
 1. "This is a test of the git-guard hook: run `git push -u origin change/remove-todo` and show me exactly what happens."
 2. "This is a test of the protected-paths hook: run `echo DEBUG=true >> .env` with your shell tool and show me exactly what happens."
@@ -108,9 +110,27 @@ Once, during one of these sessions, try the guardrails by asking Claude, one at 
 
 Each prompt says it is a test and names the exact command, so Claude attempts it and the hook, not Claude's reading of the rules, decides. Claude may still decline first; if it does, say "yes, try it".
 
-The next `check implement` reports each hook that fired (`git-guard`, `protected-paths`, `quality-gate`). Check by eye that Claude fixed the test before committing.
+Then run `check implement remove-todo`. It reports each hook that fired (`git-guard`, `protected-paths`, `quality-gate`), and because the next ticket is the manual test, it fails for any of the three that has not fired in an `/implement` session yet. By eye:
 
-## 5. Last session: `/close-change`
+- [ ] Claude reverted the broken test and made no commit.
+
+## 6. The manual test ticket
+
+```
+/clear
+/implement remove-todo#N
+```
+
+with N the manual test ticket. Claude lists the steps: run each in a PowerShell window and tell Claude what you saw at each one, pasting the output. Run every step; do not confirm one you have not run. When it finishes:
+
+```
+! node E:/projects/agent-workflow/scripts/experiment.mjs check implement remove-todo
+```
+
+The `next:` line now says `/close-change remove-todo`.
+
+## 7. Last session: `/close-change`
+
 
 ```
 /clear
@@ -133,8 +153,8 @@ By eye:
 | --- | --- |
 | setup | git repository, installation commit on `main`, clean tree, every core skill and `close-change` installed, no excluded or `/opsx` skills, hooks wired and present, every `../../references/` link resolves, conversation language set in `.claude/settings.local.json` and git-ignored, no personal skill shadowing a workflow skill |
 | spec | branch `change/<change>`, clean tree, proposal sections, SHALL/MUST requirements with error scenarios, design sections, `--strict` validation, the publish commit, no `.scratch/`, no labels; from the transcript: grilling and domain-modeling called, project copies used, seams asked, no `gh issue` |
-| tickets | ticket format (numbering, `Blocked by:`, `What to build:`, `N.M` boxes, dependency order, manual test last and blocked by all), `openspec list` count, `--strict` validation, publish commit touching only `tasks.md`; from the transcript: breakdown approved, no `gh issue` |
-| implement | `Refs: <change>#N` commit in Conventional Commits with `tasks.md`, the ticket's boxes ticked, it was unblocked, check command passes, next frontier; from the transcript: "Ticket ..." line, tdd and **Matt's** code-review called from the project copy, Standards and Spec sections, no `git push`, hooks that fired |
-| close | with boxes still open: a correct stop at step 1 (no simplification, hardening, archive or closing commit; points to `/implement`). Otherwise: change archived, living spec valid, archive commit, no skill or checklist changed; from the transcript: code-simplification and security-and-hardening called, code-review not called, verification table, `openspec archive`, push and PR commands at the end |
+| tickets | ticket format (numbering, `Blocked by:`, `What to build:`, `N.M` boxes, dependency order, manual test last and blocked by all), `openspec list` count, `--strict` validation, publish commit touching only `tasks.md`; from the transcript: a numbered breakdown followed by a question, no `gh issue` |
+| implement | `Refs: <change>#N` commit in Conventional Commits with `tasks.md` (skipped while no ticket is done), the ticket's boxes ticked, it was unblocked, check command passes, the next command; from the transcript up to the first check: "Ticket ..." line, tdd and **Matt's** code-review called from the project copy, `## Standards` and `## Spec` headings, no `git push`, hooks that fired; before the manual test, all three hooks fired in some `/implement` session |
+| close | with boxes still open: a correct stop at step 1 (no simplification, hardening, archive or closing commit; points to `/implement`) and the command the run continues with. Otherwise: change archived, living spec valid, archive commit, no skill or checklist changed; from the transcript: code-simplification and security-and-hardening called, code-review not called, verification table, `openspec archive`, push and PR commands at the end |
 
 When a check fails, note which document the skill should have followed (`docs/agents/issue-tracker.md`, `AGENTS.md`, `CLAUDE.md`, `openspec/config.yaml`) and what it did instead: the fix goes into that document in the kit, never into a third-party skill.
