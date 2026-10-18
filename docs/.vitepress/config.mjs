@@ -23,7 +23,7 @@ export default defineConfig({
   srcExclude: ['adr/**', 'agents/**', 'experiments/**', 'experiment-log.md'],
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/agent-workflow/logo.svg' }]],
   markdown: {
-    theme: { light: 'catppuccin-latte', dark: 'catppuccin-mocha' },
+    theme: { light: 'rose-pine-dawn', dark: 'rose-pine' },
     config: mermaidFences,
   },
   themeConfig: {

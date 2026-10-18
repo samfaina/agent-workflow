@@ -1,103 +1,119 @@
-/* Catppuccin: Latte for light mode, Mocha for dark mode (the default). https://catppuccin.com/palette */
+/* Rosé Pine: Dawn for light mode, Main for dark mode (the default). https://rosepinetheme.com/palette
+   The accent is rose. On Dawn, rose is too light for text, so brand-1 and brand-2 darken it. */
 
 :root {
-  --vp-c-bg: #eff1f5;
-  --vp-c-bg-alt: #e6e9ef;
-  --vp-c-bg-elv: #eff1f5;
-  --vp-c-bg-soft: #e6e9ef;
+  --vp-c-bg: #faf4ed;
+  --vp-c-bg-alt: #f2e9e1;
+  --vp-c-bg-elv: #fffaf3;
+  --vp-c-bg-soft: #f2e9e1;
 
-  --vp-c-text-1: #4c4f69;
-  --vp-c-text-2: #6c6f85;
-  --vp-c-text-3: #8c8fa1;
+  --vp-c-text-1: #575279;
+  --vp-c-text-2: #797593;
+  --vp-c-text-3: #9893a5;
 
-  --vp-c-divider: #ccd0da;
-  --vp-c-border: #bcc0cc;
-  --vp-c-gutter: #dce0e8;
+  --vp-c-divider: #dfdad9;
+  --vp-c-border: #cecacd;
+  --vp-c-gutter: #f4ede8;
 
-  --vp-c-default-1: #9ca0b0;
-  --vp-c-default-2: #acb0be;
-  --vp-c-default-3: #bcc0cc;
-  --vp-c-default-soft: rgba(156, 160, 176, 0.16);
+  --vp-c-default-1: #9893a5;
+  --vp-c-default-2: #cecacd;
+  --vp-c-default-3: #dfdad9;
+  --vp-c-default-soft: rgba(152, 147, 165, 0.14);
 
-  --vp-c-brand-1: #8839ef;
-  --vp-c-brand-2: #9c5cf2;
-  --vp-c-brand-3: #8839ef;
-  --vp-c-brand-soft: rgba(136, 57, 239, 0.14);
+  --vp-c-brand-1: #8c5552;
+  --vp-c-brand-2: #a1625f;
+  --vp-c-brand-3: #d7827e;
+  --vp-c-brand-soft: rgba(215, 130, 126, 0.16);
 
-  --vp-c-warning-1: #c47a12;
-  --vp-c-warning-2: #df8e1d;
-  --vp-c-warning-3: #df8e1d;
-  --vp-c-warning-soft: rgba(223, 142, 29, 0.14);
+  --vp-c-warning-1: #8c5e1f;
+  --vp-c-warning-2: #ea9d34;
+  --vp-c-warning-3: #ea9d34;
+  --vp-c-warning-soft: rgba(234, 157, 52, 0.14);
 
-  --vp-c-danger-1: #d20f39;
-  --vp-c-danger-2: #e64553;
-  --vp-c-danger-3: #d20f39;
-  --vp-c-danger-soft: rgba(210, 15, 57, 0.12);
+  --vp-c-danger-1: #995468;
+  --vp-c-danger-2: #b4637a;
+  --vp-c-danger-3: #b4637a;
+  --vp-c-danger-soft: rgba(180, 99, 122, 0.12);
 
-  --vp-button-brand-text: #ffffff;
-  --vp-button-brand-hover-text: #ffffff;
-  --vp-button-brand-active-text: #ffffff;
+  --vp-button-brand-text: #1f1d2e;
+  --vp-button-brand-hover-text: #1f1d2e;
+  --vp-button-brand-active-text: #1f1d2e;
 
   --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(120deg, #8839ef 30%, #1e66f5);
-  --vp-home-hero-image-background-image: linear-gradient(-45deg, #8839ef 50%, #1e66f5 50%);
+  --vp-home-hero-name-background: linear-gradient(120deg, #b4637a 30%, #907aa9);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #d7827e 50%, #907aa9 50%);
   --vp-home-hero-image-filter: blur(72px);
 
-  --aw-term-bg: #dce0e8;
-  --aw-term-shadow: rgba(136, 57, 239, 0.45);
-  --aw-term-prompt: #ea76cb;
-  --aw-term-ok: #40a02b;
-  --aw-term-path: #209fb5;
-  --aw-term-num: #fe640b;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --aw-font-heading: 'Space Grotesk', var(--vp-font-family-base);
+
+  --aw-term-bg: #f2e9e1;
+  --aw-term-shadow: rgba(215, 130, 126, 0.5);
+  --aw-term-prompt: #b4637a;
+  --aw-term-ok: #286983;
+  --aw-term-path: #56949f;
+  --aw-term-num: #ea9d34;
 }
 
 .dark {
-  --vp-c-bg: #1e1e2e;
-  --vp-c-bg-alt: #181825;
-  --vp-c-bg-elv: #252536;
-  --vp-c-bg-soft: #252536;
+  --vp-c-bg: #191724;
+  --vp-c-bg-alt: #1f1d2e;
+  --vp-c-bg-elv: #1f1d2e;
+  --vp-c-bg-soft: #26233a;
 
-  --vp-c-text-1: #cdd6f4;
-  --vp-c-text-2: #a6adc8;
-  --vp-c-text-3: #7f849c;
+  --vp-c-text-1: #e0def4;
+  --vp-c-text-2: #908caa;
+  --vp-c-text-3: #6e6a86;
 
-  --vp-c-divider: #313244;
-  --vp-c-border: #45475a;
-  --vp-c-gutter: #11111b;
+  --vp-c-divider: #2a273f;
+  --vp-c-border: #403d52;
+  --vp-c-gutter: #12101a;
 
-  --vp-c-default-1: #6c7086;
-  --vp-c-default-2: #585b70;
-  --vp-c-default-3: #45475a;
-  --vp-c-default-soft: rgba(108, 112, 134, 0.16);
+  --vp-c-default-1: #6e6a86;
+  --vp-c-default-2: #524f67;
+  --vp-c-default-3: #403d52;
+  --vp-c-default-soft: rgba(110, 106, 134, 0.16);
 
-  --vp-c-brand-1: #cba6f7;
-  --vp-c-brand-2: #b4befe;
-  --vp-c-brand-3: #cba6f7;
-  --vp-c-brand-soft: rgba(203, 166, 247, 0.16);
+  --vp-c-brand-1: #ebbcba;
+  --vp-c-brand-2: #f2d2d0;
+  --vp-c-brand-3: #ebbcba;
+  --vp-c-brand-soft: rgba(235, 188, 186, 0.16);
 
-  --vp-c-warning-1: #f9e2af;
-  --vp-c-warning-2: #fab387;
-  --vp-c-warning-3: #f9e2af;
-  --vp-c-warning-soft: rgba(249, 226, 175, 0.14);
+  --vp-c-warning-1: #f6c177;
+  --vp-c-warning-2: #f6c177;
+  --vp-c-warning-3: #f6c177;
+  --vp-c-warning-soft: rgba(246, 193, 119, 0.14);
 
-  --vp-c-danger-1: #f38ba8;
-  --vp-c-danger-2: #eba0ac;
-  --vp-c-danger-3: #f38ba8;
-  --vp-c-danger-soft: rgba(243, 139, 168, 0.14);
+  --vp-c-danger-1: #eb6f92;
+  --vp-c-danger-2: #eb6f92;
+  --vp-c-danger-3: #eb6f92;
+  --vp-c-danger-soft: rgba(235, 111, 146, 0.14);
 
-  --vp-button-brand-text: #1e1e2e;
-  --vp-button-brand-hover-text: #1e1e2e;
-  --vp-button-brand-active-text: #1e1e2e;
+  --vp-button-brand-text: #191724;
+  --vp-button-brand-hover-text: #191724;
+  --vp-button-brand-active-text: #191724;
 
-  --vp-home-hero-name-background: linear-gradient(120deg, #cba6f7 30%, #89b4fa);
-  --vp-home-hero-image-background-image: linear-gradient(-45deg, #cba6f7 50%, #89b4fa 50%);
+  --vp-home-hero-name-background: linear-gradient(120deg, #ebbcba 30%, #c4a7e7);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #ebbcba 50%, #c4a7e7 50%);
 
-  --aw-term-bg: #181825;
-  --aw-term-shadow: rgba(203, 166, 247, 0.35);
-  --aw-term-prompt: #f5c2e7;
-  --aw-term-ok: #a6e3a1;
-  --aw-term-path: #74c7ec;
-  --aw-term-num: #fab387;
+  --aw-term-bg: #16141f;
+  --aw-term-shadow: rgba(235, 188, 186, 0.3);
+  --aw-term-prompt: #eb6f92;
+  --aw-term-ok: #3e8fb0;
+  --aw-term-path: #9ccfd8;
+  --aw-term-num: #f6c177;
+}
+
+/* Headings, the hero and the site title in Space Grotesk; running text stays in Inter. */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.VPHero .name,
+.VPHero .text,
+.VPFeature .title,
+.VPNavBarTitle .title {
+  font-family: var(--aw-font-heading);
 }
 
 /* The hero image slot holds the terminal (HeroTerminal.vue), not a square image:
