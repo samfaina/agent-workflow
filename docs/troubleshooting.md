@@ -81,3 +81,7 @@ Name it: `/implement <change>#N`. Check the `Blocked by:` lines in `tasks.md`: a
 ### `/close-change` stops at "progress.remaining"
 
 Some box in `tasks.md` is unticked, often the manual test. Run the `/implement <change>#N` it names to finish that ticket.
+
+### `/close-change` archived the change but the pull request was never opened
+
+The hand-over did not finish: the branch was never pushed, or opening the pull request failed. Run `/close-change <change>` again on `change/<change>` with a clean tree (with no other active change, `/close-change` alone finds it from the branch). It sees the change is archived, skips the checks and steps that already passed, and goes straight to the hand-over.
