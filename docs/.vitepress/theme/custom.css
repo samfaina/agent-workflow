@@ -184,3 +184,57 @@
   border-radius: 0 0 12px 12px;
   background: var(--vp-c-bg-soft);
 }
+
+/* SVG diagrams (StageDiagram.vue, SessionDiagram.vue): a wide layout drawn 1:1 for the
+   content column and a narrow one for phones, picked by the figure's own width. */
+.aw-diagram {
+  container-type: inline-size;
+  margin: 28px 0;
+  padding: 20px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  background: var(--vp-c-bg-alt);
+}
+.aw-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.aw-diagram .narrow {
+  display: none;
+}
+@container (max-width: 600px) {
+  .aw-diagram .wide { display: none; }
+  .aw-diagram .narrow { display: block; }
+}
+@media (max-width: 640px) {
+  .aw-diagram { padding: 16px 8px; }
+}
+.aw-diagram figcaption {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--vp-c-text-2);
+  text-align: center;
+}
+.aw-diagram .card { fill: var(--vp-c-bg); stroke: var(--vp-c-border); stroke-width: 1.5; }
+.aw-diagram .card.hot { stroke: var(--vp-c-brand-3); stroke-width: 2; fill: color-mix(in srgb, var(--vp-c-brand-3) 14%, var(--vp-c-bg)); }
+.aw-diagram .ghost { fill: var(--vp-c-bg); stroke: var(--vp-c-border); stroke-width: 1.25; }
+.aw-diagram .num { fill: var(--vp-c-brand-1); font: 700 11.5px var(--vp-font-family-mono); }
+.aw-diagram .lbl { fill: var(--vp-c-text-2); font: 600 11.5px var(--vp-font-family-base); letter-spacing: 0.09em; }
+.aw-diagram .cmd { fill: var(--vp-c-text-1); font: 600 14px var(--vp-font-family-mono); }
+.aw-diagram .arg { fill: var(--vp-c-text-3); font: 400 12.5px var(--vp-font-family-mono); }
+.aw-diagram .badge { fill: var(--vp-c-brand-1); font: 700 13px var(--vp-font-family-mono); }
+.aw-diagram .chip { fill: var(--vp-c-bg-soft); stroke: var(--vp-c-divider); stroke-width: 1; }
+.aw-diagram .chipt { fill: var(--vp-c-text-2); font: 400 12px var(--vp-font-family-mono); }
+.aw-diagram .ln { fill: none; stroke: var(--vp-c-text-3); stroke-width: 1.75; }
+.aw-diagram .ln.hot { stroke: var(--vp-c-brand-3); }
+.aw-diagram .ln.dash { stroke-dasharray: 3 4; stroke-width: 1.25; }
+.aw-diagram .ah { fill: var(--vp-c-text-3); }
+.aw-diagram .ah.hot { fill: var(--vp-c-brand-3); }
+.aw-diagram .band { fill: color-mix(in srgb, var(--vp-c-brand-3) 16%, var(--vp-c-bg)); stroke: var(--vp-c-brand-3); stroke-width: 1.5; }
+.aw-diagram .bandt { fill: var(--vp-c-brand-1); font: 700 15px var(--aw-font-heading); }
+.aw-diagram .bands { fill: var(--vp-c-text-2); font: 400 13px var(--vp-font-family-base); }
+.aw-diagram .grp { fill: color-mix(in srgb, var(--vp-c-brand-3) 5%, transparent); stroke: var(--vp-c-text-3); stroke-width: 1.25; stroke-dasharray: 6 5; }
+.aw-diagram .grpt { fill: var(--vp-c-text-2); font: 600 11px var(--vp-font-family-base); letter-spacing: 0.08em; }
