@@ -114,10 +114,12 @@ export async function init({
     ...ctx,
   });
 
-  // 5. The kit's own skill and hooks
+  // 5. The kit's own skills and hooks
   io.log('\nKit files');
-  for (const file of readdirSync(path.join(KIT_ROOT, 'skills', 'close-change'))) {
-    await writeFileSafely(path.join(claudeDir, 'skills', 'close-change', file), readFileSync(path.join(KIT_ROOT, 'skills', 'close-change', file), 'utf8'), ctx);
+  for (const skill of readdirSync(path.join(KIT_ROOT, 'skills'))) {
+    for (const file of readdirSync(path.join(KIT_ROOT, 'skills', skill))) {
+      await writeFileSafely(path.join(claudeDir, 'skills', skill, file), readFileSync(path.join(KIT_ROOT, 'skills', skill, file), 'utf8'), ctx);
+    }
   }
   for (const file of readdirSync(path.join(KIT_ROOT, 'hooks'))) {
     await writeFileSafely(path.join(claudeDir, 'hooks', 'agent-workflow', file), readFileSync(path.join(KIT_ROOT, 'hooks', file), 'utf8'), ctx);

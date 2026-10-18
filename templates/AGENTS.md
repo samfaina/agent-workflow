@@ -10,6 +10,8 @@ Planned work goes through one **change** at a time:
 4. `/implement <change>#N`: builds ticket N, or the frontier ticket when N is left out. One ticket per fresh session.
 5. `/close-change <change>`: simplification, security, verification, archive, and the pull request or local merge.
 
+Not sure what comes next? `/now-what`
+
 Specs and tickets live in OpenSpec (`openspec/`), reached only through the steps above. `docs/agents/issue-tracker.md` says how.
 
 ## Git
