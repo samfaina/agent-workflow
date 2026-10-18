@@ -30,6 +30,10 @@ _Avoid_: pipeline, process, flow
 One unit of planned work, from spec to archive, stored as a folder of OpenSpec artifacts and named in kebab-case.
 _Avoid_: feature, proposal, epic, PRD
 
+**User story**:
+A need described from a user's point of view, the usual starting point of a change; the spec turns each one into requirements.
+_Avoid_: feature request, requirement
+
 **Spec**:
 The planning artifacts of a change (proposal, delta specs and design) produced by `/to-spec`.
 _Avoid_: PRD, issue, requirements doc

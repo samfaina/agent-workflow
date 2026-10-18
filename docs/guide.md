@@ -120,45 +120,45 @@ npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm te
 
 Each step below is one command you type in Claude Code. Start a **fresh session** (`/clear`, or a new `claude`) where the step says so: a clean context makes the agent follow the documents instead of the conversation.
 
-The five workflow commands only run when you type them; Claude never starts them on its own.
+The five workflow commands only run when you type them; Claude never starts them on its own. [Example](./example.md) follows one user story through every step, with the files each one leaves behind.
 
 ### 4.1 `/grill-with-docs`: decide what to build
 
-Describe the idea after the command, for example `/grill-with-docs add a "done" command to mark to-dos as finished`. Claude interviews you in rounds of numbered questions, each with its recommendation. Answer each one ("yes" accepts the recommendation). Along the way it adds terms to `GLOSSARY.md` and records hard-to-reverse decisions in `docs/adr/`. It is finished when Claude says there is nothing left to decide.
+Describe the idea after the command, for example `/grill-with-docs add a "remove" command that deletes a to-do by its id`. Claude interviews you in rounds of numbered questions, each with its recommendation. Answer each one ("yes" accepts the recommendation). Along the way it adds terms to `GLOSSARY.md` and records hard-to-reverse decisions in `docs/adr/`. It is finished when Claude says there is nothing left to decide.
 
 ### 4.2 `/to-spec <change>`: publish the spec
 
-In the **same session**, so it can use the interview, type `/to-spec add-done-command`. The change name is kebab-case and starts with a verb. Claude:
+In the **same session**, so it can use the interview, type `/to-spec remove-todo`. The change name is kebab-case and starts with a verb. Claude:
 
-1. creates the branch `change/add-done-command`;
+1. creates the branch `change/remove-todo`;
 2. confirms with you the **seams** where tests will go;
-3. writes `proposal.md`, the delta specs and `design.md` in `openspec/changes/add-done-command/`;
-4. runs `openspec validate add-done-command --strict` until it passes;
+3. writes `proposal.md`, the delta specs and `design.md` in `openspec/changes/remove-todo/`;
+4. runs `openspec validate remove-todo --strict` until it passes;
 5. commits the spec.
 
-Check it yourself with `openspec show add-done-command`.
+Check it yourself with `openspec show remove-todo`.
 
 ### 4.3 `/to-tickets <change>`: break it into tickets
 
-In a **fresh session**, type `/to-tickets add-done-command`. Claude proposes a numbered list of tickets: each is a vertical slice you could demo on its own, with the tickets that block it. Adjust the breakdown until it feels right, then approve it. Claude writes them into `tasks.md` (the last ticket is always a manual test for you) and commits.
+In a **fresh session**, type `/to-tickets remove-todo`. Claude proposes a numbered list of tickets: each is a vertical slice you could demo on its own, with the tickets that block it. Adjust the breakdown until it feels right, then approve it. Claude writes them into `tasks.md` (the last ticket is always a manual test for you) and commits.
 
 Check progress at any time with `openspec list` (it shows ticked boxes out of total, such as `0/7 tasks`). `openspec status --change <change>` shows which planning documents exist, not the tickets.
 
 ### 4.4 `/implement <change>#N`: build one ticket
 
-In a **fresh session** for every ticket, type `/implement add-done-command#1`, then `#2` and so on: `/to-tickets` lists the commands, and each ticket ends by naming the next one. Without a number, `/implement add-done-command` picks the first ticket whose blockers are done. Claude states the ticket's title, builds it test-first, runs `code-review` on its work and shows its `## Standards` and `## Spec` reports, ticks the ticket's boxes, and commits with `Refs: add-done-command#N`. The quality gate runs your check command before the commit.
+In a **fresh session** for every ticket, type `/implement remove-todo#1`, then `#2` and so on: `/to-tickets` lists the commands, and each ticket ends by naming the next one. Without a number, `/implement remove-todo` picks the first ticket whose blockers are done. Claude states the ticket's title, builds it test-first, runs `code-review` on its work and shows its `## Standards` and `## Spec` reports, ticks the ticket's boxes, and commits with `Refs: remove-todo#N`. The quality gate runs your check command before the commit.
 
 Repeat until the next ticket is the manual test: Claude lists its few steps and gives them as one block for your shell. You run the block, paste back what it printed, and Claude ticks the boxes whose result matches.
 
 ### 4.5 `/close-change <change>`: finish it
 
-In a **fresh session**, type `/close-change add-done-command`. Claude checks every box is ticked, simplifies the change's code (`code-simplification`), audits it for security problems (`security-and-hardening`), verifies it against its requirements and scenarios, and archives it: the delta specs merge into `openspec/specs/`, and the change moves to `openspec/changes/archive/`. It stops and tells you when something must be fixed first.
+In a **fresh session**, type `/close-change remove-todo`. Claude checks every box is ticked, simplifies the change's code (`code-simplification`), audits it for security problems (`security-and-hardening`), verifies it against its requirements and scenarios, and archives it: the delta specs merge into `openspec/specs/`, and the change moves to `openspec/changes/archive/`. It stops and tells you when something must be fixed first.
 
 It finishes by handing the branch over. It writes the pull request's title and body, then follows the first of these that applies:
 
-- **No remote**: it gives you `git switch main` and `git merge --no-ff change/add-done-command` to merge the change yourself.
-- **`pullRequest` is `none`**: it gives you `git push -u origin change/add-done-command`. You open the pull request in your code host and paste the title and body.
-- **`pullRequest` names a CLI or an MCP server**: it gives you the push command and asks whether to open the pull request. Push with `! git push -u origin change/add-done-command` and say yes; Claude checks the branch reached the remote, opens the pull request and shows its URL.
+- **No remote**: it gives you `git switch main` and `git merge --no-ff change/remove-todo` to merge the change yourself.
+- **`pullRequest` is `none`**: it gives you `git push -u origin change/remove-todo`. You open the pull request in your code host and paste the title and body.
+- **`pullRequest` names a CLI or an MCP server**: it gives you the push command and asks whether to open the pull request. Push with `! git push -u origin change/remove-todo` and say yes; Claude checks the branch reached the remote, opens the pull request and shows its URL.
 
 Review the pull request in your code host and merge it.
 
