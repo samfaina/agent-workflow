@@ -148,7 +148,7 @@ The last ticket has no code: you run the finished CLI by hand and Claude compare
 /close-change remove-todo
 ```
 
-It ends with `git push` and `gh pr create` commands: the trial project has no remote, so do not run them. Then:
+The trial project has no remote, so it ends with the commands to merge the branch locally: do not run them. Then:
 
 ```
 ! node ../../scripts/experiment.mjs check close remove-todo

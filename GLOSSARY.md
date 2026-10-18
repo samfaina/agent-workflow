@@ -70,6 +70,10 @@ _Avoid_: validation, review
 Retiring a finished change and merging its delta specs into the living spec.
 _Avoid_: close, merge, done
 
+**Pull request**:
+The request, opened in the project's code host, to bring a change branch into a protected branch.
+_Avoid_: merge request, PR
+
 ## Skills
 
 **Workflow skill**:

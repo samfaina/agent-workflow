@@ -7,6 +7,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { skillsWhere } from '../installer/catalog.mjs';
 import { init, KIT_ROOT } from '../installer/init.mjs';
+import { detectPullRequestCommand, parsePullRequest } from '../installer/pull-request.mjs';
 import { sharedReferenceLinks } from '../installer/references.mjs';
 
 const KIT_HOOKS = JSON.parse(readFileSync(new URL('../templates/.claude/settings.json', import.meta.url), 'utf8')).hooks.PreToolUse;
@@ -56,7 +57,7 @@ function quietIO(answer = false) {
   };
 }
 
-async function install(projectDir, { answer = false, optional = 'none', initFrom = init } = {}) {
+async function install(projectDir, { answer = false, optional = 'none', pullRequest, initFrom = init } = {}) {
   const tools = fakeTools(projectDir);
   const io = quietIO(answer);
   await initFrom({
@@ -66,6 +67,7 @@ async function install(projectDir, { answer = false, optional = 'none', initFrom
     fetchText: async (url) => `# ${path.basename(url)}\n`,
     language: 'Spanish',
     checkCommand: 'npm test',
+    pullRequest,
     optional,
   });
   return { ...tools, io };
@@ -94,6 +96,7 @@ describe('installer in a new project', () => {
       assert.ok(existsSync(path.join(dir, file)), file);
     }
     assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).checkCommand, 'npm test');
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')).pullRequest, { via: 'none' });
     assert.equal(JSON.parse(read(dir, '.claude/settings.json')).hooks.PreToolUse.length, 2);
     assert.match(read(dir, 'openspec/config.yaml'), /Ticket format/);
     assert.match(read(dir, 'AGENTS.md'), /^<!-- agent-workflow:start -->/);
@@ -189,6 +192,57 @@ describe('installer in an existing project', () => {
     const scripts = (list, matcher) => list.filter((g) => g.matcher === matcher).flatMap((g) => g.hooks.map((h) => path.basename(h.args[0]))).sort();
     assert.equal(groups.length, KIT_HOOKS.length, 'no duplicate groups');
     for (const { matcher } of KIT_HOOKS) assert.deepEqual(scripts(groups, matcher), scripts(KIT_HOOKS, matcher), matcher);
+  });
+});
+
+describe('installer pull request setting', () => {
+  it('stores the command given with --pull-request', async () => {
+    const dir = newProject();
+    await install(dir, { pullRequest: 'tea pr create --base {base} --head {branch} --title {title}' });
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')).pullRequest, { via: 'cli', command: 'tea pr create --base {base} --head {branch} --title {title}' });
+  });
+
+  it('parses none, mcp:<server> and commands', () => {
+    assert.deepEqual(parsePullRequest(''), { via: 'none' });
+    assert.deepEqual(parsePullRequest(' none '), { via: 'none' });
+    assert.deepEqual(parsePullRequest('mcp:gitlab'), { via: 'mcp', server: 'gitlab' });
+    assert.deepEqual(parsePullRequest('glab mr create'), { via: 'cli', command: 'glab mr create' });
+    assert.throws(() => parsePullRequest('mcp:'), /name of the MCP server/);
+  });
+
+  it('proposes the CLI of the remote\'s code host only when it is installed', () => {
+    const tools = (remote, installed) => (command) => {
+      if (command === 'git remote get-url origin') return remote ? { status: 0, stdout: `${remote}\n` } : { status: 2, stdout: '' };
+      return { status: installed.some((cli) => command === `${cli} --version`) ? 0 : 1, stdout: '' };
+    };
+    assert.match(detectPullRequestCommand('.', tools('git@github.com:me/app.git', ['gh'])), /^gh pr create --base \{base\} --head \{branch\}/);
+    assert.match(detectPullRequestCommand('.', tools('https://gitlab.example.com/me/app.git', ['glab'])), /^glab mr create /);
+    assert.equal(detectPullRequestCommand('.', tools('git@github.com:me/app.git', [])), '');
+    assert.equal(detectPullRequestCommand('.', tools('https://bitbucket.org/me/app.git', ['gh', 'glab'])), '');
+    assert.equal(detectPullRequestCommand('.', tools(null, ['gh'])), '');
+  });
+
+  it('adds the setting to an existing config and keeps the user\'s values', async () => {
+    const dir = newProject();
+    const old = { protectedBranches: ['develop'], allowPush: true, checkCommand: 'pnpm test', protectedPaths: ['.env'] };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
+    const { io } = await install(dir, { answer: true, pullRequest: 'mcp:bitbucket' });
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, pullRequest: { via: 'mcp', server: 'bitbucket' } });
+    assert.ok(io.questions.some((q) => q.startsWith('Add pullRequest to .claude/agent-workflow.json?')));
+  });
+
+  it('does not ask again when the config already has the setting', async () => {
+    const dir = newProject();
+    const config = { protectedBranches: ['main'], allowPush: false, checkCommand: 'npm test', pullRequest: { via: 'mcp', server: 'gitlab' }, protectedPaths: [] };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
+    const asked = [];
+    const tools = fakeTools(dir);
+    const io = { ...quietIO(), async ask(question, fallback) { asked.push(question); return fallback; } };
+    await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', language: 'English', checkCommand: 'npm test', optional: 'none', nextSteps: false });
+    assert.ok(!asked.some((q) => q.includes('pull requests')));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), config);
   });
 });
 

@@ -1,12 +1,12 @@
 ---
 name: close-change
-description: "Close a finished OpenSpec change: simplify, harden, verify against its specs, and archive it into the living spec."
+description: "Close a finished OpenSpec change: simplify, harden, verify against its specs, archive it into the living spec, and hand its branch over."
 disable-model-invocation: true
 ---
 
 # Close Change
 
-Close one finished **change**: simplify its code, harden it, verify it against its spec, and archive it so its delta specs merge into the living spec. `code-review` already ran on every ticket during `/implement`; this skill looks at the change as a whole instead.
+Close one finished **change**: simplify its code, harden it, verify it against its spec, archive it so its delta specs merge into the living spec, and hand its branch over as a pull request or a local merge. `code-review` already ran on every ticket during `/implement`; this skill looks at the change as a whole instead.
 
 Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches and commit trailers.
 
@@ -58,9 +58,30 @@ Run `openspec archive <change> --yes`. Then run `openspec validate --specs --str
 
 ### 7. Report
 
-Summarise in a few lines: the simplification and hardening commits, the security findings left open, the verification table, and the capabilities the living spec gained or changed. Finish with the commands for the user to run:
+Summarise in a few lines: the simplification and hardening commits, the security findings left open, the verification table, and the capabilities the living spec gained or changed.
 
-```
-git push -u origin change/<change>
-gh pr create --base <base branch> --fill
-```
+### 8. Hand the branch over
+
+Write the pull request for `change/<change>` into the base branch of step 2:
+
+- **Title**: one Conventional Commits line for the whole change, `<type>(<change>): <what it does>`, taken from `proposal.md`.
+- **Body**: when `.claude/skills/pr/SKILL.md` exists, call the Skill tool with `pr` to write it. Otherwise write a short body: what the change does and why (from `proposal.md`), the capabilities the living spec gained or changed, the verification table, and the security findings left open.
+
+Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is `{ "via": "none" }`. Run `git remote`: the remote is `origin` when it is listed, otherwise the first one listed. Then follow the first case that applies:
+
+- **No remote.** Give the user the commands to merge the change themselves, and stop:
+
+  ```
+  git switch <base branch>
+  git merge --no-ff change/<change> -m "<title>"
+  ```
+
+- **`via` is `none`.** Give the user `git push -u <remote> change/<change>`, tell them to open a pull request from `change/<change>` into `<base branch>` in their code host, and show the title and the body, each in its own code block, ready to paste. Stop.
+
+- **`via` is `cli` or `mcp`.** When `allowPush` is `true`, run `git push -u <remote> change/<change>` yourself. Otherwise give the user that command. Then ask "Once the branch is pushed, shall I open the pull request with `<command's first word, or the MCP server>`?" and stop. When the user says yes:
+
+  1. Run `git ls-remote --heads <remote> change/<change>`. When it prints nothing, the branch is not pushed yet: ask the user to push it and stop.
+  2. Open the pull request:
+     - `cli`: take `command` and replace `{base}`, `{branch}`, `{title}` and `{body}` with the base branch, `change/<change>`, the title and the body, each quoted for the shell you run it in. For `{bodyFile}`, write the body to a temporary file outside the repository and use its path. Run the command.
+     - `mcp`: use the tool of the MCP server named in `server` that creates a pull request (or merge request), with `change/<change>` as the source, the base branch as the target, and the title and body. When that server or such a tool is not available, say so.
+  3. Show the pull request's URL. When opening it failed, show the error and fall back to the `none` case: give the title and body for the user to open it by hand.

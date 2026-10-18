@@ -177,7 +177,7 @@ export function gitViolation({ sub, args }, branch, config) {
 
   switch (sub) {
     case 'push': {
-      if (!config.allowPush) return 'git push is disabled. The user pushes and opens pull requests.';
+      if (!config.allowPush) return 'git push is disabled. The user pushes.';
       if (has(args, '--force', '--force-with-lease', '--force-if-includes', '--mirror') || hasShortFlag(args, 'f') || positional.some((p) => p.startsWith('+'))) {
         return 'force-pushing rewrites shared history.';
       }

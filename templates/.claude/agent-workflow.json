@@ -2,6 +2,7 @@
   "protectedBranches": ["main", "master"],
   "allowPush": false,
   "checkCommand": "{{CHECK_COMMAND}}",
+  "pullRequest": "{{PULL_REQUEST}}",
   "protectedPaths": [
     ".env",
     ".env.*",

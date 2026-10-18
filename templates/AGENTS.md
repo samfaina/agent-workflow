@@ -8,15 +8,15 @@ Planned work goes through one **change** at a time:
 2. `/to-spec <change>`: publishes the spec as an OpenSpec change.
 3. `/to-tickets <change>`: breaks it into tickets in the change's `tasks.md`.
 4. `/implement <change>#N`: builds ticket N, or the frontier ticket when N is left out. One ticket per fresh session.
-5. `/close-change <change>`: simplification, security, verification, archive.
+5. `/close-change <change>`: simplification, security, verification, archive, and the pull request or local merge.
 
 Specs and tickets live in OpenSpec (`openspec/`), reached only through the steps above. `docs/agents/issue-tracker.md` says how.
 
 ## Git
 
-- Each change lives on `change/<change>`. Protected branches (`protectedBranches` in `.claude/agent-workflow.json`) receive work only through pull requests, which the user opens.
+- Each change lives on `change/<change>`. Protected branches (`protectedBranches` in `.claude/agent-workflow.json`) receive work only through a pull request, or a merge the user makes when the project has no remote. `/close-change` hands the branch over; it opens a pull request only when `pullRequest` in `.claude/agent-workflow.json` names a tool and the user says yes.
 - Commit messages follow Conventional Commits. Work on a ticket ends with the trailer `Refs: <change>#N`.
-- The user pushes.
+- The user pushes, unless `allowPush` is `true`.
 
 ## Quality gate
 

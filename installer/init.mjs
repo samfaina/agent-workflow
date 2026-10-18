@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
 import { ensureGitignored, mergeSettings, writeBlockSafely, writeFileSafely, writeLanguageSetting } from './files.mjs';
+import { detectPullRequestCommand, mergeWorkflowConfig, parsePullRequest, PULL_REQUEST_QUESTION, readWorkflowConfig } from './pull-request.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
 
 export const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +42,7 @@ export async function init({
   fetchText = defaultFetchText,
   language,
   checkCommand,
+  pullRequest,
   optional,
   nextSteps = true,
 }) {
@@ -54,6 +56,12 @@ export async function init({
   }
   language ??= await io.ask('Which language should Claude talk to you in?', 'English');
   checkCommand ??= await io.ask('Which command checks the project (tests, lint, typecheck)? Leave empty for none.', detectCheckCommand(projectDir));
+  // A project that already chose how pull requests are opened is not asked again.
+  const workflowConfigFile = path.join(claudeDir, 'agent-workflow.json');
+  if (pullRequest === undefined && !('pullRequest' in (readWorkflowConfig(workflowConfigFile) ?? {}))) {
+    pullRequest = await io.ask(PULL_REQUEST_QUESTION, detectPullRequestCommand(projectDir, run) || 'none');
+  }
+  const pullRequestSetting = parsePullRequest(pullRequest ?? 'none');
 
   // 2. OpenSpec
   io.log('\nOpenSpec');
@@ -117,11 +125,11 @@ export async function init({
   await mergeSettings(path.join(claudeDir, 'settings.json'), JSON.parse(template('.claude/settings.json')), ctx);
   await writeLanguageSetting(path.join(claudeDir, 'settings.local.json'), language, ctx);
   ensureGitignored(projectDir, '.claude/settings.local.json', ctx);
-  await writeFileSafely(
-    path.join(claudeDir, 'agent-workflow.json'),
-    template('.claude/agent-workflow.json').replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand)),
-    ctx,
-  );
+  const workflowConfig = template('.claude/agent-workflow.json')
+    .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
+    .replace('"{{PULL_REQUEST}}"', JSON.stringify(pullRequestSetting, null, 1).replace(/\n\s*/g, ' '));
+  if (existsSync(workflowConfigFile)) await mergeWorkflowConfig(workflowConfigFile, JSON.parse(workflowConfig), ctx);
+  else await writeFileSafely(workflowConfigFile, workflowConfig, ctx);
 
   // 6. Documents the skills read
   for (const doc of ['docs/agents/issue-tracker.md', 'docs/agents/domain.md']) {

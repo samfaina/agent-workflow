@@ -20,7 +20,7 @@
     { "name": "diagnosing-bugs", "source": "matt", "tier": "core", "reason": "Disciplined loop for hard bugs, the gap left by excluding Addy's debugging skill." },
     { "name": "prototype", "source": "matt", "tier": "core", "reason": "Throwaway prototypes that answer a design question before it reaches the spec." },
     { "name": "research", "source": "matt", "tier": "optional", "reason": "Background research against primary sources, saved as a Markdown file." },
-    { "name": "pr", "source": "matt", "tier": "optional", "reason": "Shapes pull request bodies; useful once a change is closed." },
+    { "name": "pr", "source": "matt", "tier": "optional", "reason": "Writes the pull request body when /close-change hands a change over." },
     { "name": "improve-codebase-architecture", "source": "matt", "tier": "optional", "reason": "Finds refactoring opportunities in an existing codebase." },
     { "name": "handoff", "source": "matt", "tier": "optional", "reason": "Compacts a long session into a document a fresh session can pick up." },
     { "name": "writing-for-agents", "source": "matt", "tier": "optional", "reason": "Guidance for editing skills, AGENTS.md and CLAUDE.md." },

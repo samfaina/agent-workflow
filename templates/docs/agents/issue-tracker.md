@@ -23,7 +23,7 @@ Every change lives on its own branch, `change/<change>`, created from a protecte
 2. Run `git status --porcelain`. If it lists files that are not part of this change (anything outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`), stop and ask the user to commit or stash them first.
 3. If `change/<change>` exists, run `git switch change/<change>`. Otherwise switch to the first protected branch that exists and run `git switch -c change/<change>`; uncommitted change files come along.
 
-Pushing and opening pull requests is the user's job.
+Pushing is the user's job, unless `allowPush` is `true`. Only `/close-change` opens a pull request, with the tool named in `pullRequest` and after the user says yes.
 
 ## When a skill says "publish to the issue tracker" (a spec)
 

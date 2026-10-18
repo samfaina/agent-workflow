@@ -24,18 +24,13 @@ Install these once per machine. The commands are for PowerShell on Windows; they
    ```powershell
    git --version
    ```
-3. **GitHub CLI** from <https://cli.github.com>, then sign in and let Git use those credentials (needed to push branches and open pull requests):
-   ```powershell
-   gh --version
-   gh auth login
-   gh auth setup-git
-   ```
-4. **OpenSpec CLI**:
+3. **OpenSpec CLI**:
    ```powershell
    npm install -g @fission-ai/openspec@latest
    openspec --version
    ```
-5. **Claude Code**, signed in. Check it with `claude --version`.
+4. **Claude Code**, signed in. Check it with `claude --version`.
+5. Optional: **your code host's CLI or MCP server**, signed in, if you want Claude to open pull requests for you. Any code host works: GitHub (`gh`), GitLab (`glab`), Bitbucket, Azure DevOps, Gitea or none at all. Git needs credentials for your remote to push, whichever host it is.
 
 You do not need to install the Skills CLI: the installer runs it with `npx`.
 
@@ -50,7 +45,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    git add README.md
    git commit -m "chore: initial commit"
    ```
-2. Create a branch for the installation, so it reaches `main` through a pull request like everything else:
+2. Create a branch for the installation, so it reaches `main` the same way as everything else:
    ```powershell
    git switch -c chore/install-agent-workflow
    ```
@@ -62,6 +57,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
 4. Answer the questions:
    - **Language**: the language Claude talks to you in. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
    - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. Leave it empty if the project has no checks yet; you can set it later in `.claude/agent-workflow.json`.
+   - **Pull requests**: how `/close-change` opens them. Type `none` to open them yourself in your code host, `mcp:<server>` for an MCP server connected to Claude Code, or a command such as `gh pr create --base {base} --head {branch} --title {title} --body-file {bodyFile}`. When your remote is on GitHub or GitLab and its CLI is installed, the installer proposes the command. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders and more examples.
    - **Optional skills**: one question per skill, with the reason it exists. Say yes only to the topics your project touches. You can run the installer again later to add more.
 5. Look at what it created and commit it:
    ```powershell
@@ -69,11 +65,11 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    git add -A
    git commit -m "chore: install agent-workflow"
    ```
-6. Push the branch and open a pull request, then merge it:
+6. Push the branch, open a pull request into `main` in your code host and merge it:
    ```powershell
    git push -u origin chore/install-agent-workflow
-   gh pr create --base main --fill
    ```
+   With no remote, merge it locally instead: `git switch main`, then `git merge --no-ff chore/install-agent-workflow`.
 7. Close Claude Code if it is open and start it again in the project folder (`claude`), so it loads the new skills and hooks. Type `/` and check that `/grill-with-docs`, `/to-spec`, `/to-tickets`, `/implement` and `/close-change` appear.
 
 The installer never overwrites an existing file without asking. Run it again at any time: files that already match are left alone.
@@ -81,10 +77,10 @@ The installer never overwrites an existing file without asking. Run it again at 
 ### Options for automation
 
 ```powershell
-npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --optional none
+npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --optional none
 ```
 
-`--yes` accepts every default and keeps every existing file. `--optional` takes `all`, `none`, or skill names separated by commas.
+`--yes` accepts every default and keeps every existing file. `--pull-request` takes `none`, `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
 
 ## 3. Install the kit in an existing project
 
@@ -158,14 +154,13 @@ Repeat until the next ticket is the manual test: Claude lists its few steps and 
 
 In a **fresh session**, type `/close-change add-done-command`. Claude checks every box is ticked, simplifies the change's code (`code-simplification`), audits it for security problems (`security-and-hardening`), verifies it against its requirements and scenarios, and archives it: the delta specs merge into `openspec/specs/`, and the change moves to `openspec/changes/archive/`. It stops and tells you when something must be fixed first.
 
-It finishes with the commands for you to publish the branch:
+It finishes by handing the branch over. It writes the pull request's title and body, then follows the first of these that applies:
 
-```powershell
-git push -u origin change/add-done-command
-gh pr create --base main --fill
-```
+- **No remote**: it gives you `git switch main` and `git merge --no-ff change/add-done-command` to merge the change yourself.
+- **`pullRequest` is `none`**: it gives you `git push -u origin change/add-done-command`. You open the pull request in your code host and paste the title and body.
+- **`pullRequest` names a CLI or an MCP server**: it gives you the push command and asks whether to open the pull request. Push with `! git push -u origin change/add-done-command` and say yes; Claude checks the branch reached the remote, opens the pull request and shows its URL.
 
-Review the pull request on GitHub and merge it.
+Review the pull request in your code host and merge it.
 
 ### Outside a change
 

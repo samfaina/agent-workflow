@@ -343,7 +343,7 @@ export function checkClose(dir, change) {
     report.check('close-change: did not run code-review again', !run.skills.includes('code-review'), 'code-review was called');
     report.check('close-change: showed a verification report', /Completeness/.test(run.assistantText) && /Correctness/.test(run.assistantText) && /Coherence/.test(run.assistantText), 'no Completeness / Correctness / Coherence table');
     report.check('close-change: ran openspec archive', run.commands.some((c) => c.includes(`openspec archive ${change}`)), 'no openspec archive command');
-    report.check('close-change: ended with the push and PR commands', run.assistantText.includes(`git push -u origin change/${change}`) && /gh pr create/.test(run.assistantText), 'push or PR command missing');
+    report.check('close-change: ended with the local merge commands (the trial has no remote)', run.assistantText.includes(`git merge --no-ff change/${change}`), 'merge command missing');
     guardrailMessages(report, run, 'close-change');
   });
   return report.items;
