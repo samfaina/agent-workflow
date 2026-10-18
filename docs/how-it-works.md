@@ -8,12 +8,7 @@ This page explains the model. To install the kit and run your first change, foll
 
 A piece of work is a **change**. It goes through five stages, and each stage starts with one command you type. Claude never starts a stage on its own.
 
-```mermaid
-flowchart LR
-  grill[Interview] --> spec[Spec] --> tickets[Tickets] --> impl[Implement]
-  impl -->|next ticket| impl
-  impl --> close[Close] --> living[("Living spec")]
-```
+<StageDiagram />
 
 The stages run in this order every time. When the last one finishes, the change is **archived**: its requirements merge into the **living spec**, the description of what your product does today, and the next change starts from there.
 

@@ -2,17 +2,6 @@ import { defineConfig } from 'vitepress';
 
 const repo = 'https://github.com/samfaina/agent-workflow';
 
-// Renders ```mermaid fences with the MermaidDiagram component (theme/MermaidDiagram.vue),
-// which draws them in the site's palette.
-function mermaidFences(md) {
-  const fence = md.renderer.rules.fence;
-  md.renderer.rules.fence = (tokens, idx, ...rest) => {
-    const token = tokens[idx];
-    if (token.info.trim() !== 'mermaid') return fence(tokens, idx, ...rest);
-    return `<MermaidDiagram code="${encodeURIComponent(token.content)}" />`;
-  };
-}
-
 export default defineConfig({
   title: 'agent-workflow',
   description: 'A spec-first workflow for Claude Code: Matt Pocock\'s skills run it, OpenSpec stores it, Addy Osmani\'s skills act as specialists.',
@@ -23,11 +12,10 @@ export default defineConfig({
   srcExclude: ['adr/**', 'agents/**', 'experiments/**', 'experiment-log.md'],
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/agent-workflow/logo.svg' }]],
   markdown: {
-    theme: { light: 'catppuccin-latte', dark: 'catppuccin-mocha' },
-    config: mermaidFences,
+    theme: { light: 'rose-pine-dawn', dark: 'rose-pine' },
   },
   themeConfig: {
-    logo: '/logo.svg',
+    logo: { light: '/logo-light.svg', dark: '/logo-dark.svg' },
     nav: [
       { text: 'How it works', link: '/how-it-works' },
       { text: 'What gets installed', link: '/what-gets-installed' },
