@@ -33,6 +33,7 @@ export default defineConfig({
         text: 'Using it',
         items: [
           { text: 'Guide', link: '/guide' },
+          { text: 'Example', link: '/example' },
           { text: 'Troubleshooting', link: '/troubleshooting' },
         ],
       },

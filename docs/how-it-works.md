@@ -52,7 +52,7 @@ Everything the workflow produces is a file in your repository:
 openspec/
 ├── config.yaml                rules the kit adds to every artifact
 ├── changes/
-│   ├── add-done-command/      a change in progress
+│   ├── remove-todo/           a change in progress
 │   │   ├── proposal.md        why, what, and what is out of scope
 │   │   ├── specs/             delta specs, one folder per capability
 │   │   ├── design.md          decisions and test seams
@@ -106,7 +106,7 @@ Claude cannot loosen them: their configuration file is itself protected, so chan
 | Term | Meaning |
 | --- | --- |
 | **Workflow** | The fixed sequence of stages a change goes through: interview, spec, tickets, implementation (one ticket per session) and close. |
-| **Change** | One unit of planned work, from spec to archive, stored as a folder of OpenSpec files and named in kebab-case, such as `add-done-command`. |
+| **Change** | One unit of planned work, from spec to archive, stored as a folder of OpenSpec files and named in kebab-case, such as `remove-todo`. |
 | **Spec** | The planning files of a change: proposal, delta specs and design. |
 | **Delta spec** | The requirements a change adds, modifies, removes or renames, written against the living spec. |
 | **Living spec** | What the product does today, made by merging the delta specs of every archived change. |
