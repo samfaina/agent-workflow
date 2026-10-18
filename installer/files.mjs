@@ -22,7 +22,7 @@ export async function writeFileSafely(file, content, { io, projectDir }) {
     return 'created';
   }
   if (normalise(readFileSync(file, 'utf8')) === normalise(content)) return 'unchanged';
-  if (await io.confirm(`${shown} already exists and differs from the kit's version. Overwrite it?`, false)) {
+  if (await io.confirm(`Overwrite ${shown}?`, false, 'It already exists and differs from the kit\'s version.')) {
     write(file, content);
     io.log(`  replaced ${shown}`);
     return 'replaced';
@@ -53,7 +53,7 @@ export async function writeBlockSafely(file, body, { io, projectDir }) {
     io.log(`  updated ${shown}`);
     return 'replaced';
   }
-  if (!(await io.confirm(`${shown} already exists. Append the agent-workflow section to it?`, true))) {
+  if (!(await io.confirm(`Append the agent-workflow section to ${shown}?`, true, 'The file already exists; its content is kept.'))) {
     io.log(`  kept ${shown}`);
     return 'kept';
   }
@@ -78,7 +78,7 @@ export async function writeLanguageSetting(file, language, { io, projectDir }) {
     }
   }
   if (settings.language === value) return 'unchanged';
-  if (settings.language && !(await io.confirm(`${shown} sets the language to "${settings.language}". Change it to "${value}"?`, true))) {
+  if (settings.language && !(await io.confirm(`Change the language in ${shown} to "${value}"?`, true, `It sets the language to "${settings.language}".`))) {
     io.log(`  kept ${shown}`);
     return 'kept';
   }
@@ -130,7 +130,7 @@ export async function mergeSettings(file, kitSettings, { io, projectDir }) {
   }
   if (!added) return 'unchanged';
   const existed = existsSync(file);
-  if (existed && !(await io.confirm(`Add ${added} agent-workflow hook(s) to ${shown}? Existing settings are kept.`, true))) {
+  if (existed && !(await io.confirm(`Add ${added} agent-workflow hook(s) to ${shown}?`, true, 'Existing settings are kept.'))) {
     io.log(`  kept ${shown}`);
     return 'kept';
   }

@@ -54,11 +54,11 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    npx github:samfaina/agent-workflow init
    ```
    `npx` downloads the kit from GitHub into npm's cache and runs it from there: you need no clone and no GitHub sign-in. The first time, it asks whether to install the package; answer `y`, or put `--yes` after `npx`. To try a branch of the kit before it reaches `main`, add `#<branch>` to the repository: `npx github:samfaina/agent-workflow#<branch> init`.
-4. Answer the questions:
-   - **Language**: the language Claude talks to you in. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
-   - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. Leave it empty if the project has no checks yet; you can set it later in `.claude/agent-workflow.json`.
-   - **Pull requests**: how `/close-change` opens them. Type `none` to open them yourself in your code host, `mcp:<server>` for an MCP server connected to Claude Code, or a command such as `gh pr create --base {base} --head {branch} --title {title} --body-file {bodyFile}`. When your remote is on GitHub or GitLab and its CLI is installed, the installer proposes the command. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders and more examples.
-   - **Optional skills**: one question per skill, with the reason it exists. Say yes only to the topics your project touches. You can run the installer again later to add more.
+4. Answer the questions. Each one lists numbered choices with the default marked `›`: type a number, or press Enter to take the default. The "Other…" choices ask for the text on the next line; leave it empty to go back to the list.
+   - **Language**: the language Claude talks to you in: English, Spanish or another one. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
+   - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. The installer proposes `npm test` when `package.json` has a test script; choose "None" if the project has no checks yet. You can set it later in `.claude/agent-workflow.json`.
+   - **Pull requests**: how `/close-change` opens them: GitHub (`gh`), GitLab (`glab`), Bitbucket (Atlassian's MCP server), another MCP server connected to Claude Code, a command of your own, or "None" to open them yourself in your code host. When your remote is on GitHub or GitLab and its CLI is installed, that host is the default. If the CLI is missing or you pick an MCP server, the installer adds how to install or connect it to its next steps. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders for your own command.
+   - **Optional skills**: one list with the reason for each skill. Type the numbers of the topics your project touches, separated by commas, `all`, or press Enter for none. You can run the installer again later to add more.
 5. Look at what it created and commit it:
    ```powershell
    git status
@@ -80,7 +80,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --optional none
 ```
 
-`--yes` accepts every default and keeps every existing file. `--pull-request` takes `none`, `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
+`--yes` accepts every default and keeps every existing file. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
 
 ## 3. Install the kit in an existing project
 

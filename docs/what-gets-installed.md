@@ -131,7 +131,7 @@ The command can use five placeholders, quoted for the shell when they are filled
 "pullRequest": { "via": "mcp", "server": "atlassian" }
 ```
 
-The installer asks for this setting. When `origin` points to github.com and `gh` is installed, or to a GitLab host and `glab` is installed, it proposes the matching command; otherwise the default is `none`. Type `none`, `mcp:<server>` or your own command, or pass the answer with `--pull-request`. In a project that already has the kit, running the installer again adds the setting and keeps the rest of the file.
+The installer asks for this setting with a list: GitHub (the `gh` command above), GitLab (the `glab` command), Bitbucket (Atlassian's MCP server, asking for its name with `atlassian` as the default), another MCP server, your own command, or none. When `origin` points to github.com and `gh` is installed, or to a GitLab host and `glab` is installed, that host is the default; otherwise the default is none. The installer never installs a CLI or connects an MCP server: when the chosen CLI is missing, or you pick an MCP server, its next steps say how. Pass the answer with `--pull-request` instead: `none`, `github`, `gitlab`, `bitbucket`, `mcp:<server>` or your own command. In a project that already has the kit, running the installer again adds the setting and keeps the rest of the file.
 
 With a remote and any value, the push stays yours unless `allowPush` is `true`. In a project with no remote, `/close-change` ignores the setting and gives you the commands to merge the branch locally. Unless your Claude Code permissions already allow them, Claude Code also asks before Claude runs the command or calls the MCP tool.
 

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
 import { ensureGitignored, mergeSettings, writeBlockSafely, writeFileSafely, writeLanguageSetting } from './files.mjs';
-import { detectPullRequestCommand, mergeWorkflowConfig, parsePullRequest, PULL_REQUEST_QUESTION, readWorkflowConfig } from './pull-request.mjs';
+import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
 
 export const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,14 +54,36 @@ export async function init({
   if (!existsSync(path.join(projectDir, '.git'))) {
     io.warn('This folder is not a git repository. The hooks expect one: run `git init` first.');
   }
-  language ??= await io.ask('Which language should Claude talk to you in?', 'English');
-  checkCommand ??= await io.ask('Which command checks the project (tests, lint, typecheck)? Leave empty for none.', detectCheckCommand(projectDir));
   // A project that already chose how pull requests are opened is not asked again.
   const workflowConfigFile = path.join(claudeDir, 'agent-workflow.json');
-  if (pullRequest === undefined && !('pullRequest' in (readWorkflowConfig(workflowConfigFile) ?? {}))) {
-    pullRequest = await io.ask(PULL_REQUEST_QUESTION, detectPullRequestCommand(projectDir, run) || 'none');
-  }
+  const askPullRequest = pullRequest === undefined && !('pullRequest' in (readWorkflowConfig(workflowConfigFile) ?? {}));
+  const steps = askPullRequest ? 3 : 2;
+  language ??= await io.choose({
+    step: `1/${steps}`,
+    title: 'Language',
+    detail: 'The language Claude talks to you in. Everything written to the repository stays in English.',
+    choices: [
+      { label: 'English', value: 'English' },
+      { label: 'Spanish', value: 'Spanish' },
+      { label: 'Other…', input: { label: 'Language' } },
+    ],
+  });
+  const detectedCheck = detectCheckCommand(projectDir);
+  checkCommand ??= await io.choose({
+    step: `2/${steps}`,
+    title: 'Check command',
+    detail: 'The quality gate runs it before every commit: tests, lint, typecheck. You can change it later in .claude/agent-workflow.json.',
+    choices: [
+      ...(detectedCheck ? [{ label: detectedCheck, note: 'detected in package.json', value: detectedCheck }] : []),
+      { label: 'Other command…', input: { label: 'Command' } },
+      { label: 'None', note: 'no checks yet', value: '' },
+    ],
+    selected: detectedCheck ? 0 : 1,
+  });
+  if (askPullRequest) pullRequest = await io.choose({ step: `3/${steps}`, ...pullRequestQuestion(projectDir, run) });
   const pullRequestSetting = parsePullRequest(pullRequest ?? 'none');
+  const followUp = pullRequest === undefined ? null : pullRequestFollowUp(pullRequestSetting, projectDir, run);
+  if (followUp?.warning) io.warn(followUp.warning);
 
   // 2. OpenSpec
   io.log('\nOpenSpec');
@@ -80,16 +102,19 @@ export async function init({
   // 3. Third-party skills
   io.log('\nSkills');
   const present = installedSkills(projectDir);
-  const wanted = [...skillsWhere({ tier: 'core' })];
-  for (const skill of skillsWhere({ tier: 'optional' })) {
-    const accept = optional === 'all' || (Array.isArray(optional) && optional.includes(skill.name)) ||
-      (optional === undefined && (await io.confirm(`Install ${skill.name} (${SOURCES[skill.source].author})? ${skill.reason}`, false)));
-    if (accept) wanted.push(skill);
-  }
+  const offered = skillsWhere({ tier: 'optional' });
+  optional ??= await io.chooseMany({
+    title: 'Optional skills',
+    detail: 'Pick the topics your project touches: numbers separated by commas, "all", or Enter for none. You can run the installer again later to add more.',
+    choices: offered.map((s) => ({ label: s.name, note: SOURCES[s.source].author, detail: s.reason, value: s.name })),
+  });
+  const accepted = offered.filter((s) => optional === 'all' || (Array.isArray(optional) && optional.includes(s.name)));
+  const wanted = [...skillsWhere({ tier: 'core' }), ...accepted];
   const already = wanted.filter((s) => present.includes(s.name));
   let reinstall = false;
   if (already.length) {
-    reinstall = await io.confirm(`Already installed: ${already.map((s) => s.name).join(', ')}. Reinstall them from upstream (overwrites them)?`, false);
+    reinstall = await io.confirm('Reinstall the skills that are already installed?', false,
+      `${already.map((s) => s.name).join(', ')}. Reinstalling copies them again from upstream and overwrites them.`);
   }
   for (const source of Object.keys(SOURCES)) {
     const names = wanted.filter((s) => s.source === source && (reinstall || !present.includes(s.name))).map((s) => s.name);
@@ -143,11 +168,15 @@ export async function init({
   await writeBlockSafely(path.join(projectDir, 'CLAUDE.md'), claude, ctx);
   warnAboutOldAgentSkillsBlock(ctx);
 
-  if (nextSteps) io.log(`
-Done. Next steps:
-  1. Review the changes with \`git status\` and commit them on a branch.
-  2. Restart Claude Code in this folder so it loads the new skills and hooks.
-  3. Start your first change with /grill-with-docs.`);
+  if (nextSteps) {
+    const todo = [
+      'Review the changes with `git status` and commit them on a branch.',
+      ...(followUp?.step ? [followUp.step] : []),
+      'Restart Claude Code in this folder so it loads the new skills and hooks.',
+      'Start your first change with /grill-with-docs.',
+    ];
+    io.log(`\nDone. Next steps:\n${todo.map((line, i) => `  ${i + 1}. ${line}`).join('\n')}`);
+  }
   return { skills: installedSkills(projectDir), catalog: SKILLS.length };
 }
 
@@ -165,7 +194,7 @@ async function installOpenSpecConfig({ io, projectDir, freshOpenSpec }) {
   // OpenSpec's stock config holds only example comments: replace it without asking
   // when this run created it, and with "yes" as the default answer otherwise.
   if (current && !hasSettings) {
-    const replace = freshOpenSpec || (await io.confirm('openspec/config.yaml holds only OpenSpec\'s example comments. Replace it with the kit\'s config?', true));
+    const replace = freshOpenSpec || (await io.confirm('Replace openspec/config.yaml with the kit\'s config?', true, 'It holds only OpenSpec\'s example comments.'));
     if (!replace) return;
     writeFileSync(file, kit);
     io.log('  replaced openspec/config.yaml');
@@ -186,7 +215,7 @@ async function offerOpsxRemoval({ io, projectDir }) {
   if (!found.length) return;
   const shown = found.map((f) => path.relative(projectDir, f).replace(/\\/g, '/'));
   io.warn(`OpenSpec's own commands and skills are installed: ${shown.join(', ')}. They compete with /to-spec and /implement.`);
-  if (await io.confirm('Delete them? Your changes and specs in openspec/ are not touched.', false)) {
+  if (await io.confirm('Delete them?', false, 'Your changes and specs in openspec/ are not touched.')) {
     for (const dir of found) rmSync(dir, { recursive: true, force: true });
     io.log(`  deleted ${shown.join(', ')}`);
   }

@@ -28,8 +28,9 @@ Options for init:
   -y, --yes            Accept every default without asking; existing files are kept
   --language <name>    Language Claude talks to you in (default: English)
   --check <command>    Command the quality gate runs before each commit
-  --pull-request <how> How /close-change opens pull requests: none, mcp:<server>,
-                       or a command using {base} {branch} {title} {body} {bodyFile}
+  --pull-request <how> How /close-change opens pull requests: none, github, gitlab,
+                       bitbucket (Atlassian's MCP server), mcp:<server>, or a command
+                       using {base} {branch} {title} {body} {bodyFile}
   --optional <list>    Optional skills to install: all, none, or names separated by commas`;
 
 if (values.help || !command) {

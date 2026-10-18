@@ -7,7 +7,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { skillsWhere } from '../installer/catalog.mjs';
 import { init, KIT_ROOT } from '../installer/init.mjs';
-import { detectPullRequestCommand, parsePullRequest } from '../installer/pull-request.mjs';
+import { PassThrough } from 'node:stream';
+import { createConsoleIO } from '../installer/io.mjs';
+import { detectPullRequestPreset, parsePullRequest, pullRequestFollowUp, pullRequestQuestion } from '../installer/pull-request.mjs';
 import { sharedReferenceLinks } from '../installer/references.mjs';
 
 const KIT_HOOKS = JSON.parse(readFileSync(new URL('../templates/.claude/settings.json', import.meta.url), 'utf8')).hooks.PreToolUse;
@@ -51,8 +53,9 @@ function quietIO(answer = false) {
     questions,
     log() {},
     warn(message) { questions.push(`WARN ${message}`); },
-    async ask(_question, fallback) { return fallback; },
-    async confirm(question) { questions.push(question); return answer; },
+    async choose({ choices, selected = 0 }) { return choices[selected].value; },
+    async chooseMany() { return []; },
+    async confirm(question, _fallback, detail = '') { questions.push(detail ? `${question} ${detail}` : question); return answer; },
     close() {},
   };
 }
@@ -124,7 +127,7 @@ describe('installer in a new project', () => {
     const { io, commands } = await install(dir);
     const after = ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', '.claude/settings.local.json', '.gitignore', 'openspec/config.yaml'].map((f) => read(dir, f));
     assert.deepEqual(after, before);
-    assert.deepEqual(io.questions.filter((q) => !q.startsWith('Already installed')), []);
+    assert.deepEqual(io.questions.filter((q) => !q.startsWith('Reinstall')), []);
     assert.ok(!commands.some((c) => c.includes('skills@latest add')), 'nothing to reinstall');
   });
 });
@@ -202,24 +205,45 @@ describe('installer pull request setting', () => {
     assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')).pullRequest, { via: 'cli', command: 'tea pr create --base {base} --head {branch} --title {title}' });
   });
 
-  it('parses none, mcp:<server> and commands', () => {
+  it('parses none, presets, mcp:<server> and commands', () => {
     assert.deepEqual(parsePullRequest(''), { via: 'none' });
+    assert.match(parsePullRequest('github').command, /^gh pr create /);
+    assert.match(parsePullRequest('gitlab').command, /^glab mr create /);
+    assert.deepEqual(parsePullRequest('bitbucket'), { via: 'mcp', server: 'atlassian' });
     assert.deepEqual(parsePullRequest(' none '), { via: 'none' });
     assert.deepEqual(parsePullRequest('mcp:gitlab'), { via: 'mcp', server: 'gitlab' });
     assert.deepEqual(parsePullRequest('glab mr create'), { via: 'cli', command: 'glab mr create' });
     assert.throws(() => parsePullRequest('mcp:'), /name of the MCP server/);
   });
 
+  const hostTools = (remote, installed) => (command) => {
+    if (command === 'git remote get-url origin') return remote ? { status: 0, stdout: `${remote}\n` } : { status: 2, stdout: '' };
+    return { status: installed.some((cli) => command === `${cli} --version`) ? 0 : 1, stdout: '' };
+  };
+
   it('proposes the CLI of the remote\'s code host only when it is installed', () => {
-    const tools = (remote, installed) => (command) => {
-      if (command === 'git remote get-url origin') return remote ? { status: 0, stdout: `${remote}\n` } : { status: 2, stdout: '' };
-      return { status: installed.some((cli) => command === `${cli} --version`) ? 0 : 1, stdout: '' };
-    };
-    assert.match(detectPullRequestCommand('.', tools('git@github.com:me/app.git', ['gh'])), /^gh pr create --base \{base\} --head \{branch\}/);
-    assert.match(detectPullRequestCommand('.', tools('https://gitlab.example.com/me/app.git', ['glab'])), /^glab mr create /);
-    assert.equal(detectPullRequestCommand('.', tools('git@github.com:me/app.git', [])), '');
-    assert.equal(detectPullRequestCommand('.', tools('https://bitbucket.org/me/app.git', ['gh', 'glab'])), '');
-    assert.equal(detectPullRequestCommand('.', tools(null, ['gh'])), '');
+    assert.equal(detectPullRequestPreset('.', hostTools('git@github.com:me/app.git', ['gh'])), 'github');
+    assert.equal(detectPullRequestPreset('.', hostTools('https://gitlab.example.com/me/app.git', ['glab'])), 'gitlab');
+    assert.equal(detectPullRequestPreset('.', hostTools('git@github.com:me/app.git', [])), '');
+    assert.equal(detectPullRequestPreset('.', hostTools('https://bitbucket.org/me/app.git', ['gh', 'glab'])), '');
+    assert.equal(detectPullRequestPreset('.', hostTools(null, ['gh'])), '');
+  });
+
+  it('defaults the question to the detected host, otherwise to none', () => {
+    const selected = (tools) => { const q = pullRequestQuestion('.', tools); return q.choices[q.selected].label; };
+    assert.equal(selected(hostTools('git@github.com:me/app.git', ['gh'])), 'GitHub');
+    assert.equal(selected(hostTools('git@github.com:me/app.git', [])), 'None');
+  });
+
+  it('says what is still missing for the chosen tool', () => {
+    const none = hostTools(null, []);
+    assert.match(pullRequestFollowUp(parsePullRequest('github'), '.', none).step, /Install gh .*gh auth login/);
+    assert.match(pullRequestFollowUp(parsePullRequest('github'), '.', none).warning, /gh is not installed/);
+    assert.equal(pullRequestFollowUp(parsePullRequest('github'), '.', hostTools(null, ['gh'])), null);
+    assert.match(pullRequestFollowUp(parsePullRequest('bitbucket'), '.', none).step, /`atlassian` MCP server.*support\.atlassian\.com/);
+    assert.match(pullRequestFollowUp(parsePullRequest('mcp:gitea'), '.', none).step, /`gitea` MCP server.*claude mcp add/);
+    assert.equal(pullRequestFollowUp(parsePullRequest('tea pr create'), '.', none), null);
+    assert.equal(pullRequestFollowUp(parsePullRequest('none'), '.', none), null);
   });
 
   it('adds the setting to an existing config and keeps the user\'s values', async () => {
@@ -239,10 +263,125 @@ describe('installer pull request setting', () => {
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
     const asked = [];
     const tools = fakeTools(dir);
-    const io = { ...quietIO(), async ask(question, fallback) { asked.push(question); return fallback; } };
+    const io = { ...quietIO(), async choose(question) { asked.push(question.title); return question.choices[question.selected ?? 0].value; } };
     await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', language: 'English', checkCommand: 'npm test', optional: 'none', nextSteps: false });
-    assert.ok(!asked.some((q) => q.includes('pull requests')));
+    assert.ok(!asked.includes('Pull requests'));
     assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), config);
+  });
+});
+
+describe('installer questions', () => {
+  it('asks the three questions as numbered steps and stores the answers', async () => {
+    const dir = newProject();
+    const tools = fakeTools(dir);
+    const asked = [];
+    const io = {
+      ...quietIO(),
+      async choose(question) { asked.push(`${question.step} ${question.title}`); return question.choices[question.selected ?? 0].value; },
+    };
+    await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', optional: 'none', nextSteps: false });
+    assert.deepEqual(asked, ['1/3 Language', '2/3 Check command', '3/3 Pull requests']);
+    const config = JSON.parse(read(dir, '.claude/agent-workflow.json'));
+    assert.equal(config.checkCommand, '', 'with nothing detected, none is the default');
+    assert.deepEqual(config.pullRequest, { via: 'none' });
+    assert.equal(JSON.parse(read(dir, '.claude/settings.local.json')).language, 'english');
+  });
+
+  it('installs the optional skills picked from the list', async () => {
+    const dir = newProject();
+    const tools = fakeTools(dir);
+    const io = { ...quietIO(), async chooseMany({ choices }) { return [choices[0].value]; } };
+    await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', language: 'English', checkCommand: '', pullRequest: 'none', nextSteps: false });
+    const first = skillsWhere({ tier: 'optional' })[0].name;
+    assert.ok(existsSync(path.join(dir, '.claude', 'skills', first, 'SKILL.md')), first);
+  });
+});
+
+// Runs `ask` against a console IO fed `answers`, returning its result and output.
+async function consoleSession(answers, ask, { env = {}, tty = false } = {}) {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  output.isTTY = tty;
+  let shown = '';
+  output.on('data', (chunk) => { shown += chunk; });
+  const io = createConsoleIO({ input, output, env });
+  input.end(answers.map((a) => `${a}\n`).join(''));
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    return { result: await ask(io), shown, warnings };
+  } finally {
+    console.warn = warn;
+    io.close();
+  }
+}
+
+describe('console prompts', () => {
+  const language = {
+    step: '1/3',
+    title: 'Language',
+    detail: 'The language Claude talks to you in.',
+    choices: [
+      { label: 'English', value: 'English' },
+      { label: 'Spanish', value: 'Spanish' },
+      { label: 'Other…', input: { label: 'Language' } },
+    ],
+  };
+
+  it('shows the title, explanation and each choice on its own line', async () => {
+    const { result, shown } = await consoleSession([''], (io) => io.choose(language));
+    assert.equal(result, 'English', 'Enter takes the default');
+    assert.match(shown, /\[1\/3\] Language\n {6}The language Claude talks to you in\.\n/);
+    assert.match(shown, /› 1\) English\n {4}2\) Spanish\n {4}3\) Other…\n/);
+    assert.match(shown, /Choose \[1\]: /);
+  });
+
+  it('repeats the question after an invalid answer', async () => {
+    const { result, warnings } = await consoleSession(['7', 'two', '2'], (io) => io.choose(language));
+    assert.equal(result, 'Spanish');
+    assert.equal(warnings.length, 2);
+    assert.match(warnings[0], /from 1 to 3/);
+  });
+
+  it('reads free text under an "Other…" choice and goes back to the menu when it is empty', async () => {
+    assert.equal((await consoleSession(['3', 'Catalan'], (io) => io.choose(language))).result, 'Catalan');
+    assert.equal((await consoleSession(['3', '', '2'], (io) => io.choose(language))).result, 'Spanish');
+    const server = { title: 'PR', choices: [{ label: 'Bitbucket', input: { label: 'Server', fallback: 'atlassian', value: (n) => `mcp:${n}` } }] };
+    assert.equal((await consoleSession(['1', ''], (io) => io.choose(server))).result, 'mcp:atlassian');
+  });
+
+  it('takes the default once the input ends', async () => {
+    assert.equal((await consoleSession([], (io) => io.choose({ ...language, selected: 1 }))).result, 'Spanish');
+  });
+
+  it('picks several choices from one list', async () => {
+    const choices = ['a', 'b', 'c'].map((v) => ({ label: v, value: v }));
+    assert.deepEqual((await consoleSession(['3, 1'], (io) => io.chooseMany({ title: 'Skills', choices }))).result, ['a', 'c']);
+    assert.deepEqual((await consoleSession(['all'], (io) => io.chooseMany({ title: 'Skills', choices }))).result, ['a', 'b', 'c']);
+    assert.deepEqual((await consoleSession([''], (io) => io.chooseMany({ title: 'Skills', choices }))).result, []);
+    assert.deepEqual((await consoleSession(['4', '2'], (io) => io.chooseMany({ title: 'Skills', choices }))).result, ['b']);
+  });
+
+  it('asks yes/no questions with the explanation under the title', async () => {
+    const { result, shown } = await consoleSession(['maybe', 'y'], (io) => io.confirm('Overwrite CLAUDE.md?', false, 'It already exists.'));
+    assert.equal(result, true);
+    assert.match(shown, /\? Overwrite CLAUDE\.md\?\n {2}It already exists\.\n {2}\[y\/N\]: /);
+    assert.equal((await consoleSession([''], (io) => io.confirm('Delete them?', true))).result, true);
+  });
+
+  it('answers every question with its default under --yes', async () => {
+    const io = createConsoleIO({ yes: true });
+    assert.equal(await io.choose({ ...language, selected: 1 }), 'Spanish');
+    assert.deepEqual(await io.chooseMany({ title: 'Skills', choices: language.choices }), []);
+    assert.equal(await io.confirm('Overwrite?', false), false);
+  });
+
+  it('colours only a terminal, and never with NO_COLOR', async () => {
+    const ansi = /\u001b\[[\d;]*m/;
+    assert.doesNotMatch((await consoleSession([''], (io) => io.choose(language))).shown, ansi);
+    assert.doesNotMatch((await consoleSession([''], (io) => io.choose(language), { tty: true, env: { NO_COLOR: '1' } })).shown, ansi);
+    assert.match((await consoleSession([''], (io) => io.choose(language), { tty: true })).shown, ansi);
   });
 });
 
