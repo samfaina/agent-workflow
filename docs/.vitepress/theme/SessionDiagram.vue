@@ -3,16 +3,16 @@ import DiagramFigure from './DiagramFigure.vue';
 import { arrow, deal, flash, head, lit, off, on, path, pulse, rect, tag, text, trace } from './diagram.js';
 
 // The five commands as you type them, grouped by the Claude Code session each runs in,
-// then the pull request you open yourself. Wide: two rows; narrow: one column. Keys for the
+// then the push and pull request that hand the branch over. Wide: two rows; narrow: one column. Keys for the
 // timeline: g0-g4 for a session and its cards, x0-x3 for the arrow out of it.
 const SESSIONS = [
   { label: 'SAME SESSION', cards: [['/grill-with-docs', '<idea>'], ['/to-spec', '<change>']] },
   { label: 'FRESH SESSION', cards: [['/to-tickets', '<change>']] },
   { label: 'FRESH SESSION · EACH TICKET', cards: [['/implement', '<change>#N']], each: true },
   { label: 'FRESH SESSION', cards: [['/close-change', '<change>']] },
-  { label: 'YOU, IN THE SHELL', cards: [['git push', 'gh pr create']], you: true },
+  { label: 'HAND THE BRANCH OVER', cards: [['git push', 'pull request']], you: true },
 ];
-const LABEL = 'The five workflow commands, the session each runs in, and the pull request you open at the end';
+const LABEL = 'The five workflow commands, the session each runs in, and the push and pull request that hand the branch over at the end';
 // Two copies sit behind /implement, each STEP further up and to the right. LIFT is room
 // above the cards for them; every session keeps it, so the cards of a row line up.
 const CH = 62, PAD = 12, GAP = 26, STEP = 5, LIFT = 2 * STEP;
