@@ -29,7 +29,7 @@
     { "name": "triage", "source": "matt", "tier": "excluded", "reason": "Moves issues through triage labels, which OpenSpec does not have." },
     { "name": "wayfinder", "source": "matt", "tier": "excluded", "reason": "Needs a map of tickets on a real issue tracker, which the adapter does not provide." },
     { "name": "implement-spec", "source": "matt", "tier": "excluded", "reason": "Builds a whole spec with parallel agents on an integration branch, against one ticket per session." },
-    { "name": "ask-matt", "source": "matt", "tier": "excluded", "reason": "Routes to flows the kit replaces, such as triage and wayfinder." },
+    { "name": "ask-matt", "source": "matt", "tier": "excluded", "reason": "Routes to flows the kit replaces, such as triage and wayfinder. The kit's /now-what replaces it." },
     { "name": "grill-me", "source": "matt", "tier": "excluded", "reason": "Same interview as grilling, without the docs grill-with-docs keeps." },
     { "name": "git-guardrails-claude-code", "source": "matt", "tier": "excluded", "reason": "A bash hook that the kit's cross-platform git-guard hook replaces." },
     { "name": "setup-pre-commit", "source": "matt", "tier": "excluded", "reason": "Husky pre-commit setup for JavaScript only; the kit's quality gate covers any stack." },

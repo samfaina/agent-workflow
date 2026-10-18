@@ -70,7 +70,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    git push -u origin chore/install-agent-workflow
    ```
    With no remote, merge it locally instead: `git switch main`, then `git merge --no-ff chore/install-agent-workflow`.
-7. Close Claude Code if it is open and start it again in the project folder (`claude`), so it loads the new skills and hooks. Type `/` and check that `/grill-with-docs`, `/to-spec`, `/to-tickets`, `/implement` and `/close-change` appear.
+7. Close Claude Code if it is open and start it again in the project folder (`claude`), so it loads the new skills and hooks. Type `/` and check that `/grill-with-docs`, `/to-spec`, `/to-tickets`, `/implement`, `/close-change` and `/now-what` appear.
 
 The installer never overwrites an existing file without asking. Run it again at any time: files that already match are left alone.
 
@@ -120,7 +120,7 @@ npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm te
 
 Each step below is one command you type in Claude Code. Start a **fresh session** (`/clear`, or a new `claude`) where the step says so: a clean context makes the agent follow the documents instead of the conversation.
 
-The five workflow commands only run when you type them; Claude never starts them on its own. [Example](./example.md) follows one user story through every step, with the files each one leaves behind.
+The five workflow commands only run when you type them; Claude never starts them on its own. When you are not sure which one comes next, type `/now-what`: Claude reads the conversation and the repository and answers with the next command, why, and whether to start a fresh session first. It changes nothing itself. [Example](./example.md) follows one user story through every step, with the files each one leaves behind.
 
 ### 4.1 `/grill-with-docs`: decide what to build
 

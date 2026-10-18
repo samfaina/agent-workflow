@@ -1,12 +1,12 @@
 # What gets installed
 
-The installer puts two kinds of things into your project. The **kit**'s own pieces come from this repository: the adapter, the `close-change` skill, the hooks, and the templates for `AGENTS.md`, `CLAUDE.md` and OpenSpec's configuration. The skills come from the two **sources**, Matt Pocock's and Addy Osmani's collections, copied unmodified from upstream. OpenSpec itself is a command-line tool you install once per machine (see [the guide](./guide.md)).
+The installer puts two kinds of things into your project. The **kit**'s own pieces come from this repository: the adapter, the `close-change` and `now-what` skills, the hooks, and the templates for `AGENTS.md`, `CLAUDE.md` and OpenSpec's configuration. The skills come from the two **sources**, Matt Pocock's and Addy Osmani's collections, copied unmodified from upstream. OpenSpec itself is a command-line tool you install once per machine (see [the guide](./guide.md)).
 
 ## Files in your project
 
 | Path | What it is |
 | --- | --- |
-| `.claude/skills/<name>/` | Matt's and Addy's skills, copied unmodified from upstream, plus the kit's `close-change` |
+| `.claude/skills/<name>/` | Matt's and Addy's skills, copied unmodified from upstream, plus the kit's `close-change` and `now-what` |
 | `.claude/references/` | Shared checklists that Addy's skills link to |
 | `.claude/hooks/agent-workflow/` | The hooks (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
@@ -48,7 +48,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 | `triage` | Matt Pocock | excluded | Moves issues through triage labels, which OpenSpec does not have. |
 | `wayfinder` | Matt Pocock | excluded | Needs a map of tickets on a real issue tracker, which the adapter does not provide. |
 | `implement-spec` | Matt Pocock | excluded | Builds a whole spec with parallel agents on an integration branch, against one ticket per session. |
-| `ask-matt` | Matt Pocock | excluded | Routes to flows the kit replaces, such as triage and wayfinder. |
+| `ask-matt` | Matt Pocock | excluded | Routes to flows the kit replaces, such as triage and wayfinder. The kit's /now-what replaces it. |
 | `grill-me` | Matt Pocock | excluded | Same interview as grilling, without the docs grill-with-docs keeps. |
 | `git-guardrails-claude-code` | Matt Pocock | excluded | A bash hook that the kit's cross-platform git-guard hook replaces. |
 | `setup-pre-commit` | Matt Pocock | excluded | Husky pre-commit setup for JavaScript only; the kit's quality gate covers any stack. |
@@ -83,7 +83,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 | `doubt-driven-development` | Addy Osmani | excluded | Triggers on every non-trivial decision and overlaps grilling and code-review. |
 <!-- skills-table:end -->
 
-The kit's own skill, `close-change`, is always installed: it chains simplification, security, verification and archive.
+The kit's own skills are always installed: `close-change` chains simplification, security, verification and archive, and `now-what` reads where the work stands and tells you the next command, without running it. Both run only when you type them.
 
 The installer lists each Addy skill it installs in `CLAUDE.md`, with the kind of work it is for, so Claude knows when to reach for it.
 

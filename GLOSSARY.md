@@ -81,8 +81,12 @@ _Avoid_: merge request, PR
 ## Skills
 
 **Workflow skill**:
-A skill that moves a change from one stage to the next; only Matt's skills and the kit's own skills play this role.
+A skill that moves a change from one stage to the next; only Matt's skills and the kit's `close-change` play this role.
 _Avoid_: driver, orchestrator
+
+**Guide skill**:
+A kit skill that reads where the work stands and recommends the next command, without moving any change itself.
+_Avoid_: router, wizard, assistant
 
 **Specialist skill**:
 A skill that brings expertise on one topic (security, performance, accessibility…) when the work touches it, without driving the workflow.
