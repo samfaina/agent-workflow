@@ -4,7 +4,7 @@
 
 ## Consequences
 
-- The installer recognises only two CLIs, `gh` for github.com and `glab` for GitLab hosts, so it can propose a command; every other tool is typed by the user.
+- The installer offers three presets: `gh` and `glab`, which it can also recognise from the remote to propose as the default, and Atlassian's MCP server for Bitbucket. Every other tool is typed by the user. The installer never installs a CLI or connects an MCP server: when one is missing it only says how in its next steps, so the kit does not track any host's install or connection details.
 - The push stays the user's job unless `allowPush` is `true`. With a tool configured, `/close-change` asks before opening the pull request and checks with `git ls-remote` that the branch reached the remote.
 - No hook guards the pull request command: the explicit question and Claude Code's permission prompt cover it, and a hook per host's CLI would bring back the coupling this decision removes.
 - A missing `pullRequest` means `none`, so projects installed before this setting keep working; running the installer again adds it and keeps the rest of the file.
