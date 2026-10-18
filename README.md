@@ -12,8 +12,18 @@ A kit that sets up a spec-first workflow for Claude Code in any project:
 npx github:samfaina/agent-workflow init
 ```
 
-- [docs/guide.md](docs/guide.md): install, daily flow, every skill and why, troubleshooting.
+**Documentation: <https://samfaina.github.io/agent-workflow/>**
+
+The same pages, readable on GitHub:
+
+- [docs/how-it-works.md](docs/how-it-works.md): the workflow stage by stage, where things live, and why.
+- [docs/what-gets-installed.md](docs/what-gets-installed.md): every file, skill and hook the installer adds.
+- [docs/guide.md](docs/guide.md): install and daily flow.
+- [docs/troubleshooting.md](docs/troubleshooting.md).
+
+For maintainers:
+
 - [docs/experiment-log.md](docs/experiment-log.md): the plan for a real run of the workflow; each run's results are in [docs/experiments/](docs/experiments/).
 - [docs/adr/](docs/adr/) and [GLOSSARY.md](GLOSSARY.md): decisions and vocabulary.
 
-Development: `npm test` runs the hook and installer tests. After editing `installer/skills.json`, run `node scripts/sync-guide.mjs`.
+Development: `npm test` runs the hook and installer tests. After editing `installer/skills.json`, run `node scripts/sync-skills-table.mjs`. For the docs site, run `npm install` once, then `npm run docs:dev` to preview it; GitHub Actions publishes it on every push to `main`.
