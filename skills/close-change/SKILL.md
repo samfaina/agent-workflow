@@ -14,14 +14,18 @@ Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches
 
 ### 1. Check the change is ready
 
-The argument is the change name. Without one, run `openspec list`; with exactly one active change take it, otherwise ask which one.
+The argument is the change name. Without one, run `openspec list`; with exactly one active change take it. With no active change, when `git branch --show-current` prints `change/<name>` and `<name>` is an archived change, take it. Otherwise ask which one.
+
+A change is **archived** when `openspec list` does not show it and `openspec/changes/archive/<date>-<change>/` exists: OpenSpec prefixes the folder with the date of the archive. An earlier run of this skill archived it, but its hand-over did not finish.
 
 Every check below must hold. When one fails, report which and stop:
 
 - `git branch --show-current` prints `change/<change>`.
 - `git status --porcelain` prints nothing.
-- `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>#N` for the first ticket that has one; the manual test ticket counts.
-- `openspec validate <change> --strict` says the change is valid.
+- `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>#N` for the first ticket that has one; the manual test ticket counts. Skip this check for an archived change.
+- `openspec validate <change> --strict` says the change is valid. Skip this check for an archived change.
+
+An archived change passed the last two checks before its archive: when the first two hold, skip steps 2 to 7 and resume at step 8.
 
 ### 2. Pin the diff
 
@@ -66,6 +70,8 @@ Write the pull request for `change/<change>` into the base branch of step 2:
 
 - **Title**: one Conventional Commits line for the whole change, `<type>(<change>): <what it does>`, taken from `proposal.md`.
 - **Body**: when `.claude/skills/pr/SKILL.md` exists, call the Skill tool with `pr` to write it. Otherwise write a short body: what the change does and why (from `proposal.md`), the capabilities the living spec gained or changed, the verification table, and the security findings left open.
+
+When resuming an archived change, find the base branch as step 2 does. Read `proposal.md` from `openspec/changes/archive/<date>-<change>/`; the capabilities are the folder names under its `specs/`. The verification table and the security findings belong to the earlier run, so the body leaves them out, whether `pr` writes it or you do.
 
 Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is `{ "via": "none" }`. Run `git remote`: the remote is `origin` when it is listed, otherwise the first one listed. Then follow the first case that applies:
 

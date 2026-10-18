@@ -134,3 +134,5 @@ The command can use five placeholders, quoted for the shell when they are filled
 The installer asks for this setting. When `origin` points to github.com and `gh` is installed, or to a GitLab host and `glab` is installed, it proposes the matching command; otherwise the default is `none`. Type `none`, `mcp:<server>` or your own command, or pass the answer with `--pull-request`. In a project that already has the kit, running the installer again adds the setting and keeps the rest of the file.
 
 With a remote and any value, the push stays yours unless `allowPush` is `true`. In a project with no remote, `/close-change` ignores the setting and gives you the commands to merge the branch locally. Unless your Claude Code permissions already allow them, Claude Code also asks before Claude runs the command or calls the MCP tool.
+
+When the hand-over does not finish, run `/close-change <change>` again to finish it: see [Troubleshooting](./troubleshooting.md#close-change-archived-the-change-but-the-pull-request-was-never-opened).
