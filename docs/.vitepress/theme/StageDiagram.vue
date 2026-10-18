@@ -91,7 +91,8 @@ function timeline() {
   let t = 900;
   STAGES.forEach((s, i) => {
     steps.push(on(t, `s${i}`), flash(t, `s${i}`));
-    if (s.loop) for (let lap = 0; lap < 3; lap++, t += 900) steps.push(trace(t + 300, `s${i}`, 900));
+    // Each lap flashes the card as the pulse comes back round, once the last flash is out.
+    if (s.loop) for (let lap = 0; lap < 3; lap++, t += 1100) steps.push(trace(t + 1000, `s${i}`, 900), flash(t + 1700, `s${i}`, undefined, 1000));
     t += 800;
     steps.push(trace(t, `a${i}`, 600), on(t + 400, `a${i}`));
     t += 600;

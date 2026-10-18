@@ -35,7 +35,7 @@ export const pulse = (d) => path(d, 'pulse');
 export const on = (t, k) => ({ t, k, fx: 'on' });
 export const off = (t, k) => ({ t, k, fx: 'off' });
 // n picks one of the group's outlines, pulse paths or stacked copies; without it, all of them.
-export const flash = (t, k, n) => ({ t, k, n, fx: 'flash', dur: 1600 });
+export const flash = (t, k, n, dur = 1600) => ({ t, k, n, fx: 'flash', dur });
 export const trace = (t, k, dur, n) => ({ t, k, n, dur, fx: 'trace' });
 // Slides a stacked copy out from behind its card. Copies count from the nearest.
 export const deal = (t, k, n) => ({ t, k, n, fx: 'deal', dur: 800 });

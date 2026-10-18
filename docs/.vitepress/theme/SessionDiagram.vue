@@ -94,7 +94,10 @@ function timeline() {
       steps.push(flash(t, `g${i}`, n));
       t += 800;
     });
-    if (s.each) for (let n = 0; n < 2; n++, t += 900) steps.push(deal(t, `g${i}`, n));
+    if (s.each) {
+      t += 800;
+      for (let n = 0; n < 2; n++, t += 1100) steps.push(deal(t, `g${i}`, n), flash(t + 300, `g${i}`, undefined, 1000));
+    }
     if (i === SESSIONS.length - 1) return;
     const dur = i === 1 ? 1200 : 600;
     steps.push(trace(t, `x${i}`, dur), on(t + dur * 0.7, `x${i}`), off(t, `g${i}`));
