@@ -136,3 +136,51 @@
     margin: 0 0 0 48px;
   }
 }
+
+/* Troubleshooting (pageClass: troubleshooting): each ## group gets a number and a rule,
+   and each ### symptom with its one paragraph reads as a card. */
+.troubleshooting .vp-doc > div {
+  counter-reset: ts-group;
+}
+.troubleshooting .vp-doc h2 {
+  counter-increment: ts-group;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 56px;
+}
+.troubleshooting .vp-doc h2::before {
+  content: counter(ts-group);
+  flex: none;
+  min-width: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--vp-c-brand-3);
+  color: var(--vp-button-brand-text);
+  font: 600 15px/28px var(--vp-font-family-mono);
+  text-align: center;
+}
+.troubleshooting .vp-doc h2 + p {
+  margin-bottom: 20px;
+  color: var(--vp-c-text-2);
+}
+.troubleshooting .vp-doc h3 {
+  margin: 16px 0 0;
+  padding: 16px 20px 6px;
+  border: 1px solid var(--vp-c-divider);
+  border-bottom: 0;
+  border-left: 3px solid var(--vp-c-brand-3);
+  border-radius: 12px 12px 0 0;
+  background: var(--vp-c-bg-soft);
+  font-size: 17px;
+  line-height: 1.45;
+}
+.troubleshooting .vp-doc h3 + p {
+  margin: 0;
+  padding: 0 20px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-top: 0;
+  border-left: 3px solid var(--vp-c-brand-3);
+  border-radius: 0 0 12px 12px;
+  background: var(--vp-c-bg-soft);
+}
