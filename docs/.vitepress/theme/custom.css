@@ -220,7 +220,7 @@
 }
 .aw-diagram .card { fill: var(--vp-c-bg); stroke: var(--vp-c-border); stroke-width: 1.5; }
 .aw-diagram .card.hot { stroke: var(--vp-c-brand-3); stroke-width: 2; fill: color-mix(in srgb, var(--vp-c-brand-3) 14%, var(--vp-c-bg)); }
-.aw-diagram .ghost { fill: var(--vp-c-bg); stroke: var(--vp-c-border); stroke-width: 1.25; }
+.aw-diagram .ghost { fill: color-mix(in srgb, var(--vp-c-brand-3) 6%, var(--vp-c-bg-soft)); stroke: color-mix(in srgb, var(--vp-c-brand-3) 40%, var(--vp-c-border)); stroke-width: 1.25; }
 .aw-diagram .num { fill: var(--vp-c-brand-1); font: 700 11.5px var(--vp-font-family-mono); }
 .aw-diagram .lbl { fill: var(--vp-c-text-2); font: 600 11.5px var(--vp-font-family-base); letter-spacing: 0.09em; }
 .aw-diagram .cmd { fill: var(--vp-c-text-1); font: 600 14px var(--vp-font-family-mono); }

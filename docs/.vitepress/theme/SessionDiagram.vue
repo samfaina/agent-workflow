@@ -12,13 +12,14 @@ const SESSIONS = [
   { label: 'YOU, IN THE SHELL', cards: [['git push', 'gh pr create']], you: true },
 ];
 const LABEL = 'The five workflow commands, the session each runs in, and the pull request you open at the end';
-// LIFT is room above the cards for the stacked copies behind /implement; every session
-// keeps it, so the cards of a row line up.
-const CH = 62, PAD = 12, GAP = 26, LIFT = 8;
+// Two copies sit behind /implement, each STEP further up and to the right. LIFT is room
+// above the cards for them; every session keeps it, so the cards of a row line up.
+const CH = 62, PAD = 12, GAP = 26, STEP = 5, LIFT = 2 * STEP;
 
 function card([cmd, arg], x, y, w, s) {
   const shapes = [];
-  if (s.each) shapes.push(rect(x + 8, y - 8, w, CH, 'ghost', 10), rect(x + 4, y - 4, w, CH, 'ghost', 10));
+  // Each copy reaches down to the card's bottom edge, so only its top and right edges show.
+  if (s.each) for (const k of [2 * STEP, STEP]) shapes.push(rect(x + k, y - k, w, CH + k, 'ghost', 10));
   shapes.push(rect(x, y, w, CH, s.each ? 'card hot' : 'card', 10));
   shapes.push(text(x + 14, y + 26, 'cmd', cmd), text(x + 14, y + 46, s.you ? 'cmd' : 'arg', arg));
   if (s.each) shapes.push(text(x + w - 12, y + 26, 'badge', '×N', 'end'));
@@ -29,7 +30,7 @@ function card([cmd, arg], x, y, w, s) {
 // returns its size and card boxes. The last session is yours, so it has no session box.
 function session(s, x, top, cw, stacked) {
   const n = s.cards.length;
-  const w = stacked ? cw + 2 * PAD : 2 * PAD + n * cw + (n - 1) * GAP + (s.each ? LIFT : 0);
+  const w = (stacked ? cw + 2 * PAD : 2 * PAD + n * cw + (n - 1) * GAP) + (s.each ? LIFT : 0);
   const h = 2 * PAD + LIFT + (stacked ? n * CH + (n - 1) * GAP : CH);
   const shapes = s.you ? [] : [rect(x, top, w, h, 'grp', 14)];
   shapes.push(text(x + 4, top - 8, 'grpt', s.label));
@@ -37,7 +38,7 @@ function session(s, x, top, cw, stacked) {
     const bx = x + PAD + (stacked ? 0 : i * (cw + GAP)), by = top + PAD + LIFT + (stacked ? i * (CH + GAP) : 0);
     shapes.push(...card(c, bx, by, cw, s));
     if (i > 0) shapes.push(...(stacked ? arrow(bx + 40, by - GAP + 4, bx + 40, by - 3) : arrow(bx - GAP + 4, by + CH / 2, bx - 3, by + CH / 2)));
-    return { x: bx, y: by, w: cw };
+    return { x: bx, y: by, w: cw + (s.each ? LIFT : 0) };
   });
   return { w, h, shapes, boxes };
 }
