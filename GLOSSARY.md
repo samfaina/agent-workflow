@@ -22,6 +22,10 @@ _Avoid_: bridge, shim, integration
 
 ## Changes and tickets
 
+**Workflow**:
+The fixed sequence of stages a change goes through: interview, spec, tickets, implementation (one ticket per session) and close.
+_Avoid_: pipeline, process, flow
+
 **Change**:
 One unit of planned work, from spec to archive, stored as a folder of OpenSpec artifacts and named in kebab-case.
 _Avoid_: feature, proposal, epic, PRD

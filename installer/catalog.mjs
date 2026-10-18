@@ -19,7 +19,7 @@ export function specialistLines(installedNames) {
   return lines.length ? lines.join('\n') : '- None installed.';
 }
 
-// The "Skills: what is included and why" table of docs/guide.md.
+// The skills table of docs/what-gets-installed.md.
 export function skillsTable() {
   const order = { core: 0, optional: 1, excluded: 2 };
   const rows = [...SKILLS]
