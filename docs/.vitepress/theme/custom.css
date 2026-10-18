@@ -186,7 +186,8 @@
 }
 
 /* SVG diagrams (StageDiagram.vue, SessionDiagram.vue): a wide layout drawn 1:1 for the
-   content column and a narrow one for phones, picked by the figure's own width. */
+   content column and a narrow one for phones, picked by the figure's own width. The
+   narrowest desktop column (526px, at 960px with the sidebar) still gets the wide one. */
 .aw-diagram {
   container-type: inline-size;
   margin: 28px 0;
@@ -203,8 +204,10 @@
 }
 .aw-diagram .narrow {
   display: none;
+  max-width: 400px;
+  margin: 0 auto;
 }
-@container (max-width: 600px) {
+@container (max-width: 520px) {
   .aw-diagram .wide { display: none; }
   .aw-diagram .narrow { display: block; }
 }
