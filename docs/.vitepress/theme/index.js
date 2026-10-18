@@ -7,6 +7,7 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/400-italic.css';
 import '@fontsource/jetbrains-mono/600.css';
 import HeroTerminal from './HeroTerminal.vue';
+import SessionDiagram from './SessionDiagram.vue';
 import StageDiagram from './StageDiagram.vue';
 import './custom.css';
 
@@ -15,5 +16,6 @@ export default {
   Layout: () => h(DefaultTheme.Layout, null, { 'home-hero-image': () => h(HeroTerminal) }),
   enhanceApp({ app }) {
     app.component('StageDiagram', StageDiagram);
+    app.component('SessionDiagram', SessionDiagram);
   },
 };

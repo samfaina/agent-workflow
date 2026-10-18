@@ -4,9 +4,7 @@ This guide takes you from nothing to a finished change in a project of your own.
 
 The kit sets up one workflow in Claude Code:
 
-```
-/grill-with-docs → /to-spec <change> → /to-tickets <change> → /implement <change>#N (once per ticket) → /close-change <change>
-```
+<SessionDiagram />
 
 - **Matt Pocock's skills** run the workflow: the interview, the spec, the tickets, the implementation and the code review.
 - **OpenSpec** stores what they produce: each piece of work is a **change** in `openspec/changes/<change>/`, and finished changes merge into the **living spec** in `openspec/specs/`, the description of what your product does today.
