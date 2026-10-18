@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // agent-workflow CLI. Run it inside a project:
-//   npx github:samfaina/agent-workflow init [dir] [--yes] [--language <name>] [--check <command>] [--optional all|none|a,b]
+//   npx github:samfaina/agent-workflow init [dir] [--yes] [--language <name>] [--check <command>] [--pull-request <how>] [--optional all|none|a,b]
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { skillsTable } from '../installer/catalog.mjs';
@@ -13,6 +13,7 @@ const { values, positionals } = parseArgs({
     yes: { type: 'boolean', short: 'y', default: false },
     language: { type: 'string' },
     check: { type: 'string' },
+    'pull-request': { type: 'string' },
     optional: { type: 'string' },
     help: { type: 'boolean', short: 'h', default: false },
   },
@@ -27,6 +28,8 @@ Options for init:
   -y, --yes            Accept every default without asking; existing files are kept
   --language <name>    Language Claude talks to you in (default: English)
   --check <command>    Command the quality gate runs before each commit
+  --pull-request <how> How /close-change opens pull requests: none, mcp:<server>,
+                       or a command using {base} {branch} {title} {body} {bodyFile}
   --optional <list>    Optional skills to install: all, none, or names separated by commas`;
 
 if (values.help || !command) {
@@ -39,7 +42,7 @@ if (values.help || !command) {
     : ['all', 'none'].includes(values.optional) ? values.optional
     : values.optional.split(',').map((s) => s.trim());
   try {
-    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, optional });
+    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], optional });
   } catch (error) {
     console.error(`\nagent-workflow: ${error.message}`);
     process.exitCode = 1;
