@@ -186,8 +186,10 @@
 }
 
 /* SVG diagrams (StageDiagram.vue, SessionDiagram.vue): a wide layout drawn 1:1 for the
-   content column and a narrow one for phones, picked by the figure's own width. */
+   content column and a narrow one for phones, picked by the figure's own width. The
+   narrowest desktop column (526px, at 960px with the sidebar) still gets the wide one. */
 .aw-diagram {
+  position: relative;
   container-type: inline-size;
   margin: 28px 0;
   padding: 20px 16px;
@@ -203,13 +205,15 @@
 }
 .aw-diagram .narrow {
   display: none;
+  max-width: 400px;
+  margin: 0 auto;
 }
-@container (max-width: 600px) {
+@container (max-width: 520px) {
   .aw-diagram .wide { display: none; }
   .aw-diagram .narrow { display: block; }
 }
 @media (max-width: 640px) {
-  .aw-diagram { padding: 16px 8px; }
+  .aw-diagram { padding: 40px 8px 16px; }
 }
 .aw-diagram figcaption {
   margin-top: 12px;
@@ -220,7 +224,7 @@
 }
 .aw-diagram .card { fill: var(--vp-c-bg); stroke: var(--vp-c-border); stroke-width: 1.5; }
 .aw-diagram .card.hot { stroke: var(--vp-c-brand-3); stroke-width: 2; fill: color-mix(in srgb, var(--vp-c-brand-3) 14%, var(--vp-c-bg)); }
-.aw-diagram .ghost { fill: var(--vp-c-bg); stroke: var(--vp-c-border); stroke-width: 1.25; }
+.aw-diagram .ghost { fill: color-mix(in srgb, var(--vp-c-brand-3) 6%, var(--vp-c-bg-soft)); stroke: color-mix(in srgb, var(--vp-c-brand-3) 40%, var(--vp-c-border)); stroke-width: 1.25; }
 .aw-diagram .num { fill: var(--vp-c-brand-1); font: 700 11.5px var(--vp-font-family-mono); }
 .aw-diagram .lbl { fill: var(--vp-c-text-2); font: 600 11.5px var(--vp-font-family-base); letter-spacing: 0.09em; }
 .aw-diagram .cmd { fill: var(--vp-c-text-1); font: 600 14px var(--vp-font-family-mono); }
@@ -238,3 +242,39 @@
 .aw-diagram .bands { fill: var(--vp-c-text-2); font: 400 13px var(--vp-font-family-base); }
 .aw-diagram .grp { fill: color-mix(in srgb, var(--vp-c-brand-3) 5%, transparent); stroke: var(--vp-c-text-3); stroke-width: 1.25; stroke-dasharray: 6 5; }
 .aw-diagram .grpt { fill: var(--vp-c-text-2); font: 600 11px var(--vp-font-family-base); letter-spacing: 0.08em; }
+/* What the timeline animates (diagram.js): hidden until a step shows them. The pulse is
+   brand-1, which in dark mode is the rose of the hot lines, so it turns near-white there. */
+.aw-diagram .lit { fill: none; stroke: var(--vp-c-brand-3); stroke-width: 2.5; opacity: 0; filter: drop-shadow(0 0 6px var(--vp-c-brand-3)); }
+.aw-diagram .pulse { fill: none; stroke: var(--vp-c-brand-1); stroke-width: 3; stroke-linecap: round; opacity: 0; filter: drop-shadow(0 0 4px var(--vp-c-brand-3)); }
+.aw-replay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--vp-c-text-3);
+  transition: color 0.2s, background-color 0.2s;
+}
+.aw-replay:hover {
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-default-soft);
+}
+.aw-replay:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+}
+.aw-replay svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dark .aw-diagram .pulse { stroke: var(--vp-c-text-1); }
+@media (prefers-reduced-motion: reduce) {
+  .aw-replay { display: none; }
+}
