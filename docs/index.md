@@ -36,4 +36,4 @@ In a git repository, on a branch of its own:
 npx github:samfaina/agent-workflow init
 ```
 
-The installer asks three things: the language Claude talks to you in, the command that proves your project works, and which optional skills you want. [The guide](./guide.md) walks through it step by step, including the tools to install first.
+The installer asks four things: the language Claude talks to you in, the command that proves your project works, how pull requests are opened, and which optional skills you want. [The guide](./guide.md) walks through it step by step, including the tools to install first.

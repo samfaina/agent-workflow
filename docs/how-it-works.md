@@ -42,7 +42,7 @@ Without a number, `/implement <change>` picks the first ticket whose blockers ar
 
 ### Close
 
-`/close-change <change>` looks at the change as a whole. It checks that every box is ticked, simplifies the change's code, audits it for security problems, and verifies it against every requirement and scenario of the spec. If something is missing it stops and tells you what. Otherwise it archives the change and gives you the commands to push the branch and open a pull request. You review and merge it on GitHub.
+`/close-change <change>` looks at the change as a whole. It checks that every box is ticked, simplifies the change's code, audits it for security problems, and verifies it against every requirement and scenario of the spec. If something is missing it stops and tells you what. Otherwise it archives the change and hands the branch over. It writes the pull request's title and body and gives you the command to push the branch. If you set up a tool for pull requests (your code host's CLI or MCP server), it offers to open the pull request for you; if not, you open it in your code host with the text it wrote. In a project with no remote, it gives you the commands to merge the branch locally instead. The kit works the same with GitHub, GitLab, Bitbucket or any other code host.
 
 ## Where things live
 

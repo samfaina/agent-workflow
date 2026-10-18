@@ -11,7 +11,7 @@ The installer puts two kinds of things into your project. The **kit**'s own piec
 | `.claude/hooks/agent-workflow/` | The hooks (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
 | `.claude/settings.local.json` | Your conversation language (merged into your local settings if the file exists); added to `.gitignore` |
-| `.claude/agent-workflow.json` | Hook configuration: protected branches, push, check command, protected paths |
+| `.claude/agent-workflow.json` | Workflow configuration: protected branches, push, check command, how pull requests are opened, protected paths |
 | `docs/agents/issue-tracker.md` | The **adapter**: how Matt's skills read and write OpenSpec |
 | `docs/agents/domain.md` | Where the skills find the glossary, ADRs and living spec |
 | `AGENTS.md`, `CLAUDE.md` | Workflow, git rules, language and specialist skills, between `agent-workflow` markers |
@@ -39,7 +39,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 | `diagnosing-bugs` | Matt Pocock | core | Disciplined loop for hard bugs, the gap left by excluding Addy's debugging skill. |
 | `prototype` | Matt Pocock | core | Throwaway prototypes that answer a design question before it reaches the spec. |
 | `research` | Matt Pocock | optional | Background research against primary sources, saved as a Markdown file. |
-| `pr` | Matt Pocock | optional | Shapes pull request bodies; useful once a change is closed. |
+| `pr` | Matt Pocock | optional | Writes the pull request body when /close-change hands a change over. |
 | `improve-codebase-architecture` | Matt Pocock | optional | Finds refactoring opportunities in an existing codebase. |
 | `handoff` | Matt Pocock | optional | Compacts a long session into a document a fresh session can pick up. |
 | `writing-for-agents` | Matt Pocock | optional | Guidance for editing skills, AGENTS.md and CLAUDE.md. |
@@ -98,6 +98,7 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
   "protectedBranches": ["main", "master"],
   "allowPush": false,
   "checkCommand": "npm test",
+  "pullRequest": { "via": "none" },
   "protectedPaths": [".env", ".env.*", ".claude/settings.json", "openspec/specs/**", "..."]
 }
 ```
@@ -111,3 +112,25 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
 `.claude/agent-workflow.json` is itself protected, so Claude cannot loosen its own guardrails: edit it yourself. The living spec (`openspec/specs/`) is protected because only `openspec archive`, run by `/close-change`, should change it.
 
 The hooks read the commands Claude runs and the files it edits through its edit tools. They are a guardrail against mistakes, not a security boundary: a write from inside a program (a `node -e` or `python -c` one-liner, or a script Claude writes) can still reach a protected file. `AGENTS.md` tells Claude to report a blocked action to you instead of working around it.
+
+## Pull requests
+
+The `pullRequest` setting in `.claude/agent-workflow.json` tells `/close-change` how to hand a finished change over. The kit knows no code host: it works the same with GitHub, GitLab, Bitbucket, Azure DevOps, Gitea or a repository with no remote.
+
+| Value | What `/close-change` does |
+| --- | --- |
+| `{ "via": "none" }` (default) | Writes the pull request's title and body, gives you the `git push` command, and leaves opening the pull request to you, in your code host's web page. |
+| `{ "via": "cli", "command": "..." }` | After you push the branch, asks whether to open the pull request, and on yes runs `command` with its placeholders filled in. |
+| `{ "via": "mcp", "server": "..." }` | The same, through the tool of that MCP server that creates pull requests (or merge requests). The server must be connected to Claude Code. |
+
+The command can use five placeholders, quoted for the shell when they are filled in: `{base}` (the protected branch), `{branch}` (`change/<change>`), `{title}`, `{body}` (the body as text) and `{bodyFile}` (the path of a temporary file holding the body). For example:
+
+```json
+"pullRequest": { "via": "cli", "command": "gh pr create --base {base} --head {branch} --title {title} --body-file {bodyFile}" }
+"pullRequest": { "via": "cli", "command": "glab mr create --target-branch {base} --source-branch {branch} --title {title} --description {body} --yes" }
+"pullRequest": { "via": "mcp", "server": "atlassian" }
+```
+
+The installer asks for this setting. When `origin` points to github.com and `gh` is installed, or to a GitLab host and `glab` is installed, it proposes the matching command; otherwise the default is `none`. Type `none`, `mcp:<server>` or your own command, or pass the answer with `--pull-request`. In a project that already has the kit, running the installer again adds the setting and keeps the rest of the file.
+
+With a remote and any value, the push stays yours unless `allowPush` is `true`. In a project with no remote, `/close-change` ignores the setting and gives you the commands to merge the branch locally. Unless your Claude Code permissions already allow them, Claude Code also asks before Claude runs the command or calls the MCP tool.
