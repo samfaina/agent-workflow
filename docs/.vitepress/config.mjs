@@ -15,7 +15,7 @@ export default defineConfig({
     theme: { light: 'rose-pine-dawn', dark: 'rose-pine' },
   },
   themeConfig: {
-    logo: '/logo.svg',
+    logo: { light: '/logo-light.svg', dark: '/logo-dark.svg' },
     nav: [
       { text: 'How it works', link: '/how-it-works' },
       { text: 'What gets installed', link: '/what-gets-installed' },
