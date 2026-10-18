@@ -135,4 +135,4 @@ The installer asks for this setting. When `origin` points to github.com and `gh`
 
 With a remote and any value, the push stays yours unless `allowPush` is `true`. In a project with no remote, `/close-change` ignores the setting and gives you the commands to merge the branch locally. Unless your Claude Code permissions already allow them, Claude Code also asks before Claude runs the command or calls the MCP tool.
 
-When the hand-over does not finish, because the branch was never pushed or opening the pull request failed, run `/close-change <change>` again on the change branch. The change is already archived, so it goes straight to the hand-over.
+When the hand-over does not finish, run `/close-change <change>` again to finish it: see [Troubleshooting](./troubleshooting.md#close-change-archived-the-change-but-the-pull-request-was-never-opened).
