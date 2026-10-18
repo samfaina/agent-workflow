@@ -9,6 +9,7 @@ import '@fontsource/jetbrains-mono/600.css';
 import HeroTerminal from './HeroTerminal.vue';
 import SessionDiagram from './SessionDiagram.vue';
 import StageDiagram from './StageDiagram.vue';
+import StoryDiagram from './StoryDiagram.vue';
 import './custom.css';
 
 export default {
@@ -17,5 +18,6 @@ export default {
   enhanceApp({ app }) {
     app.component('StageDiagram', StageDiagram);
     app.component('SessionDiagram', SessionDiagram);
+    app.component('StoryDiagram', StoryDiagram);
   },
 };
