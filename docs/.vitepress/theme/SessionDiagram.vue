@@ -83,20 +83,20 @@ function narrow() {
 // context is thrown away; /implement runs three tickets and deals out a copy for each rerun.
 function timeline() {
   const steps = [];
-  let t = 400;
+  let t = 900;
   SESSIONS.forEach((s, i) => {
     steps.push(on(t, `g${i}`));
     s.cards.forEach((c, n) => {
       if (n > 0) {
-        steps.push(trace(t, `g${i}`, 300, n - 1));
-        t += 300;
+        steps.push(trace(t, `g${i}`, 600, n - 1));
+        t += 600;
       }
       steps.push(flash(t, `g${i}`, n));
-      t += 450;
+      t += 800;
     });
-    if (s.each) for (let n = 0; n < 2; n++, t += 500) steps.push(deal(t, `g${i}`, n), flash(t + 150, `g${i}`));
+    if (s.each) for (let n = 0; n < 2; n++, t += 900) steps.push(deal(t, `g${i}`, n));
     if (i === SESSIONS.length - 1) return;
-    const dur = i === 1 ? 600 : 300;
+    const dur = i === 1 ? 1200 : 600;
     steps.push(trace(t, `x${i}`, dur), on(t + dur * 0.7, `x${i}`), off(t, `g${i}`));
     t += dur;
   });

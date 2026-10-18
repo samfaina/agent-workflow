@@ -88,15 +88,15 @@ function narrow() {
 // the living spec and climbs back to the interview, where the next change starts.
 function timeline() {
   const steps = [];
-  let t = 400;
+  let t = 900;
   STAGES.forEach((s, i) => {
     steps.push(on(t, `s${i}`), flash(t, `s${i}`));
-    if (s.loop) for (let lap = 0; lap < 3; lap++, t += 500) steps.push(trace(t + 50, `s${i}`, 450), flash(t + 500, `s${i}`));
-    t += 400;
-    steps.push(trace(t, `a${i}`, 300), on(t + 200, `a${i}`));
-    t += 300;
+    if (s.loop) for (let lap = 0; lap < 3; lap++, t += 900) steps.push(trace(t + 300, `s${i}`, 900));
+    t += 800;
+    steps.push(trace(t, `a${i}`, 600), on(t + 400, `a${i}`));
+    t += 600;
   });
-  steps.push(on(t, 'spec'), flash(t, 'spec'), trace(t + 400, 'back', 700), on(t + 900, 'back'), flash(t + 1100, 's0'));
+  steps.push(on(t, 'spec'), flash(t, 'spec'), trace(t + 900, 'back', 1400), on(t + 1900, 'back'), flash(t + 2300, 's0'));
   return steps;
 }
 

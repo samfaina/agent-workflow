@@ -35,20 +35,20 @@ export const pulse = (d) => path(d, 'pulse');
 export const on = (t, k) => ({ t, k, fx: 'on' });
 export const off = (t, k) => ({ t, k, fx: 'off' });
 // n picks one of the group's outlines, pulse paths or stacked copies; without it, all of them.
-export const flash = (t, k, n) => ({ t, k, n, fx: 'flash', dur: 900 });
+export const flash = (t, k, n) => ({ t, k, n, fx: 'flash', dur: 1600 });
 export const trace = (t, k, dur, n) => ({ t, k, n, dur, fx: 'trace' });
 // Slides a stacked copy out from behind its card. Copies count from the nearest.
-export const deal = (t, k, n) => ({ t, k, n, fx: 'deal', dur: 400 });
+export const deal = (t, k, n) => ({ t, k, n, fx: 'deal', dur: 800 });
 
 const DIM = 0.3;
-const FADE = 400;
+const FADE = 900;
 
 const shift = (el) => `translate(${-el.dataset.off}px, ${el.dataset.off}px)`;
 
 const FX = {
-  on: (g) => [[g, [{ opacity: 1 }], 300]],
-  off: (g) => [[g, [{ opacity: DIM }], 500]],
-  flash: (g, s) => pick(g, '.lit', s.n).map((el) => [el, [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }], s.dur]),
+  on: (g) => [[g, [{ opacity: 1 }], 700]],
+  off: (g) => [[g, [{ opacity: DIM }], 1000]],
+  flash: (g, s) => pick(g, '.lit', s.n).map((el) => [el, [{ opacity: 0 }, { opacity: 0.8, offset: 0.35 }, { opacity: 0 }], s.dur]),
   trace: (g, s) => pick(g, '.pulse', s.n).map((el) => {
     const len = el.getTotalLength(), dash = `${len} ${len}`;
     return [el, [
