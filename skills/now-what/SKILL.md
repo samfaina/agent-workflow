@@ -15,7 +15,7 @@ It is **read-only**. Read files and run only commands that report state (`git st
 Before any command, note what this conversation already holds:
 
 - **Grilling**: `/grill-with-docs` or `grilling` ran here, and no `/to-spec` ran after it.
-- **Situation**: the user described something off the main flow, such as a bug, a design question or a long session (see **Map off the main flow**).
+- **Situation**: the user described something off the workflow, such as a bug, a design question or a long session (see **Map off the workflow**).
 - **Earlier work**: anything that happened before `/now-what`.
 
 ## 2. Read the repository
@@ -38,11 +38,11 @@ Walk these states in order and stop at the first that applies.
 4. **Context lost**: no active change, the tree is dirty only with `GLOSSARY.md` or `docs/adr/`, and the conversation holds no grilling. Next: `/grill-with-docs` to rebuild the context, then `/to-spec <change>`. Why: `/to-spec` works from the interview, which a fresh session lacks.
 5. **No tickets**: an active change has no `tasks.md`. Next: `/to-tickets <change>`.
 6. **Tickets open**: an active change has an unticked box. Next: `/implement <change>#N`, N being its frontier ticket. Find it with the rule in `docs/agents/issue-tracker.md`.
-7. **Ready to close**: every box of an active change is ticked. Next: `/close-change <change>`.
+7. **Finished**: every box of an active change is ticked. Next: `/close-change <change>`.
 8. **Hand-over pending**: a pending hand-over exists. Run `git remote`: the remote is `origin` when it is listed, otherwise the first one listed.
    - No remote, or `git ls-remote --heads <remote> change/<x>` prints nothing: the branch is not pushed. Next: `/close-change <x>`.
    - Otherwise the pull request waits in the code host. Next: review and merge it there; once merged, `git switch <base>` and `git pull`.
-9. **Nothing in flight**: Next: `/grill-with-docs` to start a change. When the conversation holds a situation, use **Map off the main flow** instead.
+9. **Nothing in flight**: Next: `/grill-with-docs` to start a change. When the conversation holds a situation, use **Map off the workflow** instead.
 
 **Several active changes** reach states 5 to 7 together: list each change with its state and next command, and mark the one whose branch `change/<change>` is the current branch. The user picks; this skill does not ask.
 
@@ -64,7 +64,7 @@ Session: start a fresh one first (/clear)
 
 For several active changes, write one `Where you are` / `Next` pair per change and one `Why` for all of them.
 
-## Map off the main flow
+## Map off the workflow
 
 Use this map only when the conversation holds a situation, and only after steps 2 and 3: a change in states 2 to 8 comes first. Recommend a skill only when `.claude/skills/<skill>/SKILL.md` exists; optional skills may not be installed. When the right one is missing, say that the installer offers it.
 

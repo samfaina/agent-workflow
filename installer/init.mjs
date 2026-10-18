@@ -116,9 +116,10 @@ export async function init({
 
   // 5. The kit's own skills and hooks
   io.log('\nKit files');
-  for (const skill of readdirSync(path.join(KIT_ROOT, 'skills'))) {
-    for (const file of readdirSync(path.join(KIT_ROOT, 'skills', skill))) {
-      await writeFileSafely(path.join(claudeDir, 'skills', skill, file), readFileSync(path.join(KIT_ROOT, 'skills', skill, file), 'utf8'), ctx);
+  for (const skill of readdirSync(path.join(KIT_ROOT, 'skills'), { withFileTypes: true }).filter((e) => e.isDirectory())) {
+    const dir = path.join(KIT_ROOT, 'skills', skill.name);
+    for (const file of readdirSync(dir)) {
+      await writeFileSafely(path.join(claudeDir, 'skills', skill.name, file), readFileSync(path.join(dir, file), 'utf8'), ctx);
     }
   }
   for (const file of readdirSync(path.join(KIT_ROOT, 'hooks'))) {
