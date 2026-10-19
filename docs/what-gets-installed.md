@@ -8,7 +8,7 @@ The installer puts two kinds of things into your project. The **kit**'s own piec
 | --- | --- |
 | `.claude/skills/<name>/` | Matt's and Addy's skills, copied unmodified from upstream, plus the kit's `close-change` and `now-what` |
 | `.claude/references/` | Shared checklists that Addy's skills link to |
-| `.claude/hooks/agent-workflow/` | The hooks (Node scripts) |
+| `.claude/hooks/agent-workflow/` | The hooks and the status module (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
 | `.claude/settings.local.json` | Your conversation language (merged into your local settings if the file exists); added to `.gitignore` |
 | `.claude/agent-workflow.json` | Workflow configuration: protected branches, push, check command, how pull requests are opened, protected paths |
@@ -16,6 +16,7 @@ The installer puts two kinds of things into your project. The **kit**'s own piec
 | `docs/agents/domain.md` | Where the skills find the glossary, ADRs and living spec |
 | `AGENTS.md`, `CLAUDE.md` | Workflow, git rules, language and specialist skills, between `agent-workflow` markers |
 | `openspec/` | OpenSpec's folders and `config.yaml` with the kit's rules |
+| `package.json` | A `workflow:status` script that prints where each change stands, if you accept it (see [Status command](#status-command)) |
 | `skills-lock.json` | Records where each third-party skill came from, for `npx skills update` |
 
 The installer never overwrites an existing file without asking. Run it again at any time: files that already match are left alone.
@@ -112,6 +113,22 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
 `.claude/agent-workflow.json` is itself protected, so Claude cannot loosen its own guardrails: edit it yourself. The living spec (`openspec/specs/`) is protected because only `openspec archive`, run by `/close-change`, should change it.
 
 The hooks read the commands Claude runs and the files it edits through its edit tools. They are a guardrail against mistakes, not a security boundary: a write from inside a program (a `node -e` or `python -c` one-liner, or a script Claude writes) can still reach a protected file. `AGENTS.md` tells Claude to report a blocked action to you instead of working around it.
+
+## Status command
+
+`.claude/hooks/agent-workflow/status.mjs` computes the **progress snapshot** of the project: each active change's stage, its tickets (done, frontier or blocked, with their blockers), its frontier ticket and the next command. It reads git and the change files itself, never the `openspec` command, so it is fast and works on a machine without OpenSpec.
+
+| Command | Prints |
+| --- | --- |
+| `node .claude/hooks/agent-workflow/status.mjs` | The roadmap of each active change, the one on the current branch first |
+| `node .claude/hooks/agent-workflow/status.mjs --json` | The same snapshot as JSON, for scripts |
+
+`/to-tickets` and `/implement` end by pasting its roadmap, and `/now-what` reads its `--json` output. When the project has a `package.json`, the installer offers to add the script `"workflow:status": "node .claude/hooks/agent-workflow/status.mjs"`, so `npm run workflow:status` prints the roadmap; running the installer again offers it again if it is missing. Without `package.json`, the installer prints an alias to create instead:
+
+```bash
+alias workflow-status='node .claude/hooks/agent-workflow/status.mjs'                # bash, zsh
+function workflow-status { node .claude/hooks/agent-workflow/status.mjs @args }     # PowerShell
+```
 
 ## Pull requests
 

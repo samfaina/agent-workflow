@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { skillsWhere } from '../../installer/catalog.mjs';
 import { sharedReferenceLinks } from '../../installer/references.mjs';
-import { frontier, isDone, parseTickets } from './tickets.mjs';
+import { frontier, isDone, parseTickets } from '../../hooks/status.mjs';
 import { allRuns, latestRun, loadedFromProject } from './transcript.mjs';
 
 const HOOKS = ['git-guard', 'protected-paths', 'quality-gate'];

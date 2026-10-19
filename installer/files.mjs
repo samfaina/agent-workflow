@@ -138,3 +138,30 @@ export async function mergeSettings(file, kitSettings, { io, projectDir }) {
   io.log(`  ${existed ? 'updated' : 'created'} ${shown}`);
   return existed ? 'replaced' : 'created';
 }
+
+// Adds `name` to the scripts of package.json, asking first, and keeps the
+// file's indentation. A script of the same name is replaced only when the user agrees.
+export async function addPackageScript(file, name, command, { io, projectDir }) {
+  const shown = path.relative(projectDir, file).replace(/\\/g, '/');
+  const text = readFileSync(file, 'utf8');
+  let pkg;
+  try {
+    pkg = JSON.parse(text);
+  } catch {
+    io.warn(`${shown} is not valid JSON, so the "${name}" script was not added. Add "${name}": "${command}" to its scripts by hand.`);
+    return 'kept';
+  }
+  const current = pkg.scripts?.[name];
+  if (current === command) return 'unchanged';
+  const agreed = current === undefined
+    ? await io.confirm(`Add a "${name}" script to ${shown}?`, true, `It runs \`${command}\`.`)
+    : await io.confirm(`Replace the "${name}" script in ${shown}?`, false, `It runs \`${current}\`; the kit's runs \`${command}\`.`);
+  if (!agreed) {
+    io.log(`  kept ${shown}`);
+    return 'kept';
+  }
+  const indent = text.match(/^([ \t]+)"/m)?.[1] ?? 2;
+  write(file, `${JSON.stringify({ ...pkg, scripts: { ...pkg.scripts, [name]: command } }, null, indent)}\n`);
+  io.log(`  ${current === undefined ? 'added' : 'replaced'} the "${name}" script in ${shown}`);
+  return current === undefined ? 'appended' : 'replaced';
+}

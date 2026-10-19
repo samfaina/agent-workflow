@@ -62,7 +62,7 @@ Used by `/to-tickets`, after the user approves the breakdown.
 3. Leave `proposal.md`, the specs and `design.md` as they are: publishing tickets never edits the spec.
 4. Run `openspec validate <change> --strict` until it passes, then `openspec list` and check that the change shows the expected number of tasks.
 5. Commit: `docs(<change>): publish tickets`.
-6. Tell the user the next steps, one command per ticket, each in a fresh session: `/implement <change>#1`, `/implement <change>#2`, and so on, ending with the manual test ticket. Say that `/implement <change>` without a number takes the next unblocked ticket.
+6. Run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block: the roadmap of the change, with the command for its first ticket. Never write the roadmap yourself. Then tell the user to build each ticket with `/implement <change>#N`, each in a fresh session, and that `/implement <change>` without a number takes the frontier ticket.
 
 ## Ticket format
 
@@ -110,7 +110,7 @@ Used by `/implement`.
 - Commit with a Conventional Commits message and the trailer `Refs: <change>#N` on its last line, with the ticked `tasks.md` in the same commit as the code.
 - When the work shows the spec is wrong or incomplete, leave the spec as it is: add a `- Note:` bullet to the ticket and tell the user.
 - In the final message of a build ticket, show the code-review reports under the headings `## Standards` and `## Spec`, written exactly so in every conversation language, as their own sections and not folded into the ticket summary.
-- End the final message with the next command: `/implement <change>#N` for the next frontier ticket, or `/close-change <change>` when every box of every ticket is ticked.
+- End the final message with the roadmap: after the commit, run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block. It names the next command, `/implement <change>#N` for the next frontier ticket or `/close-change <change>` when every box of every ticket is ticked. Never write the roadmap yourself.
 
 ## When a skill says "comment on the ticket"
 

@@ -4,13 +4,14 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
-import { ensureGitignored, mergeSettings, writeBlockSafely, writeFileSafely, writeLanguageSetting } from './files.mjs';
+import { addPackageScript, ensureGitignored, mergeSettings, writeBlockSafely, writeFileSafely, writeLanguageSetting } from './files.mjs';
 import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
 
 export const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(KIT_ROOT, 'templates');
 const OPENSPEC_MARKER = 'Managed by agent-workflow';
+export const STATUS_COMMAND = 'node .claude/hooks/agent-workflow/status.mjs';
 
 // Runs a command through the shell so `npx` resolves on Windows too.
 export function defaultRun(command, { cwd, quiet = false } = {}) {
@@ -150,6 +151,7 @@ export async function init({
   for (const file of readdirSync(path.join(KIT_ROOT, 'hooks'))) {
     await writeFileSafely(path.join(claudeDir, 'hooks', 'agent-workflow', file), readFileSync(path.join(KIT_ROOT, 'hooks', file), 'utf8'), ctx);
   }
+  await offerStatusCommand(ctx);
   await mergeSettings(path.join(claudeDir, 'settings.json'), JSON.parse(template('.claude/settings.json')), ctx);
   await writeLanguageSetting(path.join(claudeDir, 'settings.local.json'), language, ctx);
   ensureGitignored(projectDir, '.claude/settings.local.json', ctx);
@@ -201,6 +203,19 @@ async function installOpenSpecConfig({ io, projectDir, freshOpenSpec }) {
     return;
   }
   await writeFileSafely(file, kit, { io, projectDir });
+}
+
+// The status command prints the roadmap of each change: a package.json script
+// when the project has one, otherwise an alias the user creates.
+async function offerStatusCommand({ io, projectDir }) {
+  const pkg = path.join(projectDir, 'package.json');
+  if (existsSync(pkg)) {
+    await addPackageScript(pkg, 'workflow:status', STATUS_COMMAND, { io, projectDir });
+    return;
+  }
+  io.log(`  To see where each change stands, run \`${STATUS_COMMAND}\`, or create an alias for it:`);
+  io.log(`    bash, zsh:   alias workflow-status='${STATUS_COMMAND}'`);
+  io.log(`    PowerShell:  function workflow-status { ${STATUS_COMMAND} @args }`);
 }
 
 // OpenSpec's /opsx:* commands and skills compete with the workflow skills.

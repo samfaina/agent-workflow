@@ -142,11 +142,26 @@ Check it yourself with `openspec show remove-todo`.
 
 In a **fresh session**, type `/to-tickets remove-todo`. Claude proposes a numbered list of tickets: each is a vertical slice you could demo on its own, with the tickets that block it. Adjust the breakdown until it feels right, then approve it. Claude writes them into `tasks.md` (the last ticket is always a manual test for you) and commits.
 
-Check progress at any time with `openspec list` (it shows ticked boxes out of total, such as `0/7 tasks`). `openspec status --change <change>` shows which planning documents exist, not the tickets.
+Claude ends by showing the change's **roadmap**: its tickets, which are done, which comes next with its command, and what blocks the rest. Print it yourself at any time from the project folder:
+
+```bash
+npm run workflow:status        # the script the installer added to package.json
+node .claude/hooks/agent-workflow/status.mjs   # the same, without package.json
+```
+
+```
+remove-todo · 2 of 4 tickets done
+  ✓ 1. Remove a to-do by id
+  ✓ 2. Reject unknown ids
+  → 3. Confirm before removing  (next: /implement remove-todo#3)
+  · 4. Manual test              (blocked by 3)
+```
+
+With several changes in flight it shows each one, the change of the current branch first. Add `--json` for the same snapshot as JSON, for scripts.
 
 ### 4.4 `/implement <change>#N`: build one ticket
 
-In a **fresh session** for every ticket, type `/implement remove-todo#1`, then `#2` and so on: `/to-tickets` lists the commands, and each ticket ends by naming the next one. Without a number, `/implement remove-todo` picks the first ticket whose blockers are done. Claude states the ticket's title, builds it test-first, runs `code-review` on its work and shows its `## Standards` and `## Spec` reports, ticks the ticket's boxes, and commits with `Refs: remove-todo#N`. The quality gate runs your check command before the commit.
+In a **fresh session** for every ticket, type `/implement remove-todo#1`, then `#2` and so on: `/to-tickets` shows the roadmap, and each ticket ends by showing it again with the next command. Without a number, `/implement remove-todo` picks the first ticket whose blockers are done. Claude states the ticket's title, builds it test-first, runs `code-review` on its work and shows its `## Standards` and `## Spec` reports, ticks the ticket's boxes, and commits with `Refs: remove-todo#N`. The quality gate runs your check command before the commit.
 
 Repeat until the next ticket is the manual test: Claude lists its few steps and gives them as one block for your shell. You run the block, paste back what it printed, and Claude ticks the boxes whose result matches.
 
