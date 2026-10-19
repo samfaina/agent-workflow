@@ -1,10 +1,11 @@
 // `agent-workflow init`: installs the kit into the project in `projectDir`.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
-import { addPackageScript, ensureGitignored, mergeSettings, writeBlockSafely, writeFileSafely, writeLanguageSetting } from './files.mjs';
+import { addPackageScript, ensureGitignored, mergeSettings, settingsHave, writeBlockSafely, writeFileSafely, writeLanguageSetting, writeLocalSetting } from './files.mjs';
 import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
 
@@ -44,6 +45,8 @@ export async function init({
   language,
   checkCommand,
   pullRequest,
+  statusLine,
+  homeDir = homedir(),
   optional,
   nextSteps = true,
 }) {
@@ -154,6 +157,7 @@ export async function init({
   await offerStatusCommand(ctx);
   await mergeSettings(path.join(claudeDir, 'settings.json'), JSON.parse(template('.claude/settings.json')), ctx);
   await writeLanguageSetting(path.join(claudeDir, 'settings.local.json'), language, ctx);
+  if (statusLine !== false) await offerStatusLine({ ...ctx, homeDir });
   ensureGitignored(projectDir, '.claude/settings.local.json', ctx);
   const workflowConfig = template('.claude/agent-workflow.json')
     .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
@@ -216,6 +220,24 @@ async function offerStatusCommand({ io, projectDir }) {
   io.log(`  To see where each change stands, run \`${STATUS_COMMAND}\`, or create an alias for it:`);
   io.log(`    bash, zsh:   alias workflow-status='${STATUS_COMMAND}'`);
   io.log(`    PowerShell:  function workflow-status { ${STATUS_COMMAND} @args }`);
+}
+
+// Claude Code's status line shows the change of the current branch. It is a
+// personal preference, so it goes to the local settings, and it is offered only
+// while the project's settings have no status line. The local settings outrank
+// the user's, so a status line of the user's own is replaced in this project
+// only, and only when they say so.
+async function offerStatusLine({ io, projectDir, homeDir }) {
+  const local = path.join(projectDir, '.claude', 'settings.local.json');
+  if ([path.join(projectDir, '.claude', 'settings.json'), local].some((file) => settingsHave(file, 'statusLine'))) return;
+  const command = `${STATUS_COMMAND} --statusline`;
+  const example = 'On a change branch it shows a line like "add-greeting · 2/4 · next #3".';
+  const agreed = settingsHave(path.join(homeDir, '.claude', 'settings.json'), 'statusLine')
+    ? await io.confirm('Use the kit\'s status line in this project instead of yours?', false,
+      `~/.claude/settings.json has a status line of your own; the other projects keep it. ${example}`)
+    : await io.confirm('Show where the change stands in Claude Code\'s status line?', true,
+      `${example} It runs \`${command}\` and goes to .claude/settings.local.json, so only you see it.`);
+  if (agreed) writeLocalSetting(local, 'statusLine', { type: 'command', command }, { io, projectDir });
 }
 
 // OpenSpec's /opsx:* commands and skills compete with the workflow skills.

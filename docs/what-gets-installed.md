@@ -10,7 +10,7 @@ The installer puts two kinds of things into your project. The **kit**'s own piec
 | `.claude/references/` | Shared checklists that Addy's skills link to |
 | `.claude/hooks/agent-workflow/` | The hooks and the status module (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
-| `.claude/settings.local.json` | Your conversation language (merged into your local settings if the file exists); added to `.gitignore` |
+| `.claude/settings.local.json` | Your conversation language and, if you accept it, the status line (see [Status line](#status-line)), merged into your local settings if the file exists; added to `.gitignore` |
 | `.claude/agent-workflow.json` | Workflow configuration: protected branches, push, check command, how pull requests are opened, protected paths |
 | `docs/agents/issue-tracker.md` | The **adapter**: how Matt's skills read and write OpenSpec |
 | `docs/agents/domain.md` | Where the skills find the glossary, ADRs and living spec |
@@ -122,6 +122,7 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 | --- | --- |
 | `node .claude/hooks/agent-workflow/status.mjs` | The roadmap of each active change, the one on the current branch first |
 | `node .claude/hooks/agent-workflow/status.mjs --json` | The same snapshot as JSON, for scripts |
+| `node .claude/hooks/agent-workflow/status.mjs --statusline` | One line for the change of the current branch, for Claude Code's status line; nothing off a `change/*` branch |
 
 `/to-tickets` and `/implement` end by pasting its roadmap, and `/now-what` reads its `--json` output. When the project has a `package.json`, the installer offers to add the script `"workflow:status": "node .claude/hooks/agent-workflow/status.mjs"`, so `npm run workflow:status` prints the roadmap; running the installer again offers it again if it is missing. Without `package.json`, the installer prints an alias to create instead:
 
@@ -129,6 +130,30 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 alias workflow-status='node .claude/hooks/agent-workflow/status.mjs'                # bash, zsh
 function workflow-status { node .claude/hooks/agent-workflow/status.mjs @args }     # PowerShell
 ```
+
+### Status line
+
+The installer offers to show the change of the current branch in Claude Code's status line. It adds this to `.claude/settings.local.json`, because a status line is a personal preference and the team does not get it:
+
+```json
+"statusLine": { "type": "command", "command": "node .claude/hooks/agent-workflow/status.mjs --statusline" }
+```
+
+| On the branch `change/<change>` | The status line shows |
+| --- | --- |
+| Tickets still open | `add-greeting · 2/4 · next #3`: tickets done, tickets in all, the frontier ticket |
+| No `tasks.md` yet | `add-greeting · no tickets · next /to-tickets` |
+| Every box ticked | `add-greeting · 4/4 · next /close-change` |
+
+Off a `change/*` branch, or once the change is archived, it prints nothing and the status line stays blank. It reads the branch and the change's `tasks.md` only, since Claude Code runs it after every message.
+
+| Where a `statusLine` already exists | The installer |
+| --- | --- |
+| Nowhere | Asks whether to show it; the default is yes |
+| Only in `~/.claude/settings.json` | Asks whether to use the kit's in this project instead of yours; the default is no. `.claude/settings.local.json` outranks your user settings, so your other projects keep yours |
+| `.claude/settings.json` or `.claude/settings.local.json` | Does not ask |
+
+`--yes` leaves it out, and running the installer again asks again while the project has none.
 
 ## Pull requests
 

@@ -25,7 +25,8 @@ const usage = `Usage:
   agent-workflow skills-table           Print the skill catalog as a Markdown table
 
 Options for init:
-  -y, --yes            Accept every default without asking; existing files are kept
+  -y, --yes            Accept every default without asking; existing files are kept,
+                       and the status line is left out
   --language <name>    Language Claude talks to you in (default: English)
   --check <command>    Command the quality gate runs before each commit
   --pull-request <how> How /close-change opens pull requests: none, github, gitlab,
@@ -43,7 +44,9 @@ if (values.help || !command) {
     : ['all', 'none'].includes(values.optional) ? values.optional
     : values.optional.split(',').map((s) => s.trim());
   try {
-    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], optional });
+    // The status line is a personal preference: --yes leaves it out instead of accepting it.
+    const statusLine = values.yes ? false : undefined;
+    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], statusLine, optional });
   } catch (error) {
     console.error(`\nagent-workflow: ${error.message}`);
     process.exitCode = 1;

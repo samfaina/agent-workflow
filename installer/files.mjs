@@ -82,8 +82,32 @@ export async function writeLanguageSetting(file, language, { io, projectDir }) {
     io.log(`  kept ${shown}`);
     return 'kept';
   }
+  return writeLocalSetting(file, 'language', value, { io, projectDir });
+}
+
+// Whether a settings file sets `key`. A missing or unreadable file sets nothing.
+export function settingsHave(file, key) {
+  try {
+    return Object.hasOwn(JSON.parse(readFileSync(file, 'utf8')), key);
+  } catch {
+    return false;
+  }
+}
+
+// Sets `key` in .claude/settings.local.json, keeping every other setting.
+export function writeLocalSetting(file, key, value, { io, projectDir }) {
+  const shown = path.relative(projectDir, file).replace(/\\/g, '/');
   const existed = existsSync(file);
-  write(file, `${JSON.stringify({ ...settings, language: value }, null, 2)}\n`);
+  let settings = {};
+  if (existed) {
+    try {
+      settings = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      io.warn(`${shown} is not valid JSON, so ${key} was not set. Add "${key}": ${JSON.stringify(value)} to it by hand.`);
+      return 'kept';
+    }
+  }
+  write(file, `${JSON.stringify({ ...settings, [key]: value }, null, 2)}\n`);
   io.log(`  ${existed ? 'updated' : 'created'} ${shown}`);
   return existed ? 'replaced' : 'created';
 }

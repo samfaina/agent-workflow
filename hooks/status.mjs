@@ -2,8 +2,9 @@
 // The progress snapshot of the project: where each active change stands and
 // the next command. Reads git and the change files itself, never the openspec
 // CLI (ADR 0010), so it stays fast and works where openspec is not installed.
-//   node .claude/hooks/agent-workflow/status.mjs           the roadmap of each change
-//   node .claude/hooks/agent-workflow/status.mjs --json    the snapshot as JSON
+//   node .claude/hooks/agent-workflow/status.mjs                the roadmap of each change
+//   node .claude/hooks/agent-workflow/status.mjs --json         the snapshot as JSON
+//   node .claude/hooks/agent-workflow/status.mjs --statusline   one line for Claude Code's status line
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,19 +193,55 @@ export function formatRoadmap(status) {
 }
 
 // ---------------------------------------------------------------------------
+// Status line
+
+// The change of the current branch on one line, for Claude Code's status line:
+// `add-greeting · 2/4 · next #3`. Empty off a change branch, or when the change
+// is not active. It runs after every message, so it reads only the branch and
+// the change's own tasks.md.
+export function readStatusLine(projectDir) {
+  const name = currentBranch(projectDir)?.match(/^change\/(.+)$/)?.[1];
+  const dir = name && path.join(projectDir, 'openspec', 'changes', name);
+  if (!dir || name === 'archive' || !existsSync(dir)) return '';
+  const change = changeProgress(name, readIfExists(path.join(dir, 'tasks.md')));
+  const progress = change.stage === 'no-tickets' ? 'no tickets' : `${change.ticketsDone}/${change.ticketsTotal}`;
+  // The next command, without the change name the line starts with.
+  const next = change.frontier === null ? change.next.split(' ')[0] : `#${change.frontier}`;
+  return [name, progress, `next ${next}`].join(' · ');
+}
+
+// The session data Claude Code sends a status line on stdin; {} when run by hand.
+function readSessionData() {
+  if (process.stdin.isTTY) return {};
+  try {
+    return JSON.parse(readFileSync(0, 'utf8').trim() || '{}');
+  } catch {
+    return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Command
 
-const USAGE = 'Usage: node .claude/hooks/agent-workflow/status.mjs [--json]';
+const USAGE = 'Usage: node .claude/hooks/agent-workflow/status.mjs [--json | --statusline]';
 
 function main(args) {
-  if (args.some((a) => a !== '--json')) {
+  if (args.length > 1 || args.some((a) => a !== '--json' && a !== '--statusline')) {
     process.stderr.write(`${USAGE}\n`);
     process.exitCode = 1;
     return;
   }
   // Claude Code's project, or the repository around the current folder.
-  const status = readStatus(projectDirFor({ cwd: git(process.cwd(), 'rev-parse', '--show-toplevel')?.trim() }));
-  process.stdout.write(`${args.includes('--json') ? JSON.stringify(status, null, 2) : formatRoadmap(status)}\n`);
+  const findProjectDir = () => projectDirFor({ cwd: git(process.cwd(), 'rev-parse', '--show-toplevel')?.trim() });
+  if (args[0] === '--statusline') {
+    // A status line gets no CLAUDE_PROJECT_DIR: its session data names the project.
+    // No output leaves the status line blank.
+    const line = readStatusLine(readSessionData().workspace?.project_dir || findProjectDir());
+    if (line) process.stdout.write(`${line}\n`);
+    return;
+  }
+  const status = readStatus(findProjectDir());
+  process.stdout.write(`${args[0] === '--json' ? JSON.stringify(status, null, 2) : formatRoadmap(status)}\n`);
 }
 
 // Run as a command, not imported by a test or a script.

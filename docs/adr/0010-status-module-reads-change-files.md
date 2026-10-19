@@ -19,5 +19,5 @@ The module reads the branch with git, and reads `tasks.md` and `.openspec.yaml` 
 ## Consequences
 
 - The installer offers a `workflow:status` script in `package.json` when there is one; otherwise it prints an alias to create.
-- The installer offers the status line only when no `statusLine` exists in the user's or the project's settings. It writes the status line to `.claude/settings.local.json`, defaults to yes when it asks, and skips it with `--yes`.
+- The installer offers the status line only when no `statusLine` exists in the project's settings. It writes the status line to `.claude/settings.local.json`, defaults to yes when it asks, and skips it with `--yes`. When the user's settings already have a status line, it asks instead whether to use the kit's in this project, defaulting to no: the local settings outrank the user's, so their other projects keep theirs.
 - `now-what` still reads the conversation itself, for a grilling or a situation off the workflow.
