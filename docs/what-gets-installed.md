@@ -147,7 +147,13 @@ The installer offers to show the change of the current branch in Claude Code's s
 
 Off a `change/*` branch, or once the change is archived, it prints nothing and the status line stays blank. It reads the branch and the change's `tasks.md` only, since Claude Code runs it after every message.
 
-The installer asks only when no `statusLine` exists in `~/.claude/settings.json`, `.claude/settings.json` or `.claude/settings.local.json`, so it never replaces a status line of your own. The answer defaults to yes, `--yes` leaves it out, and running the installer again asks again while there is none.
+| Where a `statusLine` already exists | The installer |
+| --- | --- |
+| Nowhere | Asks whether to show it; the default is yes |
+| Only in `~/.claude/settings.json` | Asks whether to use the kit's in this project instead of yours; the default is no. `.claude/settings.local.json` outranks your user settings, so your other projects keep yours |
+| `.claude/settings.json` or `.claude/settings.local.json` | Does not ask |
+
+`--yes` leaves it out, and running the installer again asks again while the project has none.
 
 ## Pull requests
 

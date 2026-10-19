@@ -224,14 +224,19 @@ async function offerStatusCommand({ io, projectDir }) {
 
 // Claude Code's status line shows the change of the current branch. It is a
 // personal preference, so it goes to the local settings, and it is offered only
-// while no settings file of the user or the project has a status line.
+// while the project's settings have no status line. The local settings outrank
+// the user's, so a status line of the user's own is replaced in this project
+// only, and only when they say so.
 async function offerStatusLine({ io, projectDir, homeDir }) {
   const local = path.join(projectDir, '.claude', 'settings.local.json');
-  const files = [path.join(homeDir, '.claude', 'settings.json'), path.join(projectDir, '.claude', 'settings.json'), local];
-  if (files.some((file) => settingsHave(file, 'statusLine'))) return;
+  if ([path.join(projectDir, '.claude', 'settings.json'), local].some((file) => settingsHave(file, 'statusLine'))) return;
   const command = `${STATUS_COMMAND} --statusline`;
-  const agreed = await io.confirm('Show where the change stands in Claude Code\'s status line?', true,
-    `On a change branch it shows a line like "add-greeting · 2/4 · next #3". It runs \`${command}\` and goes to .claude/settings.local.json, so only you see it.`);
+  const example = 'On a change branch it shows a line like "add-greeting · 2/4 · next #3".';
+  const agreed = settingsHave(path.join(homeDir, '.claude', 'settings.json'), 'statusLine')
+    ? await io.confirm('Use the kit\'s status line in this project instead of yours?', false,
+      `~/.claude/settings.json has a status line of your own; the other projects keep it. ${example}`)
+    : await io.confirm('Show where the change stands in Claude Code\'s status line?', true,
+      `${example} It runs \`${command}\` and goes to .claude/settings.local.json, so only you see it.`);
   if (agreed) writeLocalSetting(local, 'statusLine', { type: 'command', command }, { io, projectDir });
 }
 

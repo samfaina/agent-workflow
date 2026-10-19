@@ -46,18 +46,24 @@ function fakeTools(projectDir) {
   return { run, commands };
 }
 
-// Answers every confirmation with `answer` and records the questions.
+// Answers every confirmation with `answer` and records the questions, and each one's default.
 function quietIO(answer = false) {
   const questions = [];
+  const defaults = [];
   const logs = [];
   return {
     questions,
+    defaults,
     logs,
     log(message = '') { logs.push(message); },
     warn(message) { questions.push(`WARN ${message}`); },
     async choose({ choices, selected = 0 }) { return choices[selected].value; },
     async chooseMany() { return []; },
-    async confirm(question, _fallback, detail = '') { questions.push(detail ? `${question} ${detail}` : question); return answer; },
+    async confirm(question, fallback = false, detail = '') {
+      questions.push(detail ? `${question} ${detail}` : question);
+      defaults.push([question, fallback]);
+      return answer;
+    },
     close() {},
   };
 }
@@ -267,19 +273,45 @@ describe('installer status line', () => {
     assert.equal(JSON.parse(read(dir, '.claude/settings.json')).statusLine, undefined, 'not imposed on the team');
   });
 
-  for (const [where, file] of [['the user\'s settings', 'home'], ['the project\'s settings', '.claude/settings.json'], ['the local settings', '.claude/settings.local.json']]) {
-    it(`is not offered when ${where} already have a status line`, async () => {
+  const mine = { type: 'command', command: 'my-statusline.sh' };
+  function withStatusLine(file) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ statusLine: mine }));
+  }
+
+  for (const file of ['.claude/settings.json', '.claude/settings.local.json']) {
+    it(`is not offered when ${file} already has a status line`, async () => {
       const dir = newProject();
-      const homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-'));
-      const target = file === 'home' ? path.join(homeDir, '.claude', 'settings.json') : path.join(dir, file);
-      const mine = { type: 'command', command: 'my-statusline.sh' };
-      mkdirSync(path.dirname(target), { recursive: true });
-      writeFileSync(target, JSON.stringify({ statusLine: mine }));
-      const { io } = await install(dir, { answer: true, homeDir });
-      assert.ok(!offered(io));
+      withStatusLine(path.join(dir, file));
+      const { io } = await install(dir, { answer: true });
+      assert.deepEqual(io.questions.filter((q) => /status line/.test(q)), []);
       assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')).statusLine, file === '.claude/settings.local.json' ? mine : undefined);
     });
   }
+
+  // The local settings outrank the user's, so the kit's line replaces theirs in this project only.
+  const offeredInstead = (io) => io.questions.some((q) => q.startsWith('Use the kit\'s status line in this project instead of yours?'));
+
+  it('offers to replace the user\'s own status line in this project only, defaulting to no', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-'));
+    withStatusLine(path.join(homeDir, '.claude', 'settings.json'));
+    const declined = newProject();
+    const { io } = await install(declined, { answer: false, homeDir });
+    assert.ok(offeredInstead(io) && !offered(io));
+    assert.equal(io.defaults.find(([q]) => q.startsWith('Use the kit\'s status line'))[1], false);
+    assert.equal(JSON.parse(read(declined, '.claude/settings.local.json')).statusLine, undefined);
+
+    const accepted = newProject();
+    await install(accepted, { answer: true, homeDir });
+    assert.deepEqual(JSON.parse(read(accepted, '.claude/settings.local.json')).statusLine, STATUS_LINE);
+    assert.deepEqual(JSON.parse(read(homeDir, '.claude/settings.json')).statusLine, mine, 'the user\'s settings are not touched');
+    assert.ok(!offeredInstead((await install(accepted, { answer: true, homeDir })).io), 'not offered once it is there');
+  });
+
+  it('asks the first question with yes as the default', async () => {
+    const { io } = await install(newProject());
+    assert.equal(io.defaults.find(([q]) => q.startsWith('Show where the change stands'))[1], true);
+  });
 
   it('is skipped with --yes', async () => {
     const dir = newProject();
