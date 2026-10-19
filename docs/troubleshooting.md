@@ -87,7 +87,23 @@ Your tracker's integration with your code host does the linking, not the kit. Ch
 - the branch is pushed: an integration sees only what reaches the code host;
 - the integration is set up between your tracker and your code host, and looks where the kit writes the reference: [the guide](./guide.md#link-a-change-to-your-team-tracker) lists where each tracker looks.
 
-With no integration, paste the output of `npm run workflow:status -- --report` into the work item.
+With no integration, paste the output of `npm run workflow:status -- --report` into the work item, or set a `tracker` channel so Claude posts it ([What gets installed](./what-gets-installed.md#team-tracker)).
+
+### Claude says "Could not post to PROJ-123"
+
+The post to the team tracker failed; the workflow went on, and Claude gave you the snapshot to paste. The reason in parentheses says why:
+
+- **The tracker is down, or the network is**: nothing to fix. The next transition posts the whole state again, so paste the snapshot only if the team needs it now.
+- **Expired or missing credentials** (`401`, `403`, `unauthorized`): sign in again with your tool. For an MCP server, run `/mcp` in Claude Code and reconnect it. For a command, run it by hand once, for example `my-tracker comment PROJ-123 --body-file note.txt`, and follow what it asks.
+- **`exit code 127`, or "not recognized"**: the command in `tracker` is not installed or not on your PATH.
+- **`timed out after 60 s`**: the command waited for input or for the network. A command must run without asking anything.
+- **"tracker ... is not none, mcp:<server> or a command"**: fix `tracker` in `.claude/agent-workflow.json` by hand. Running the installer again does not change a `tracker` that is already there.
+
+To post the current state once the cause is fixed, ask Claude to project the last transition again, or run `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>` yourself.
+
+### The roadmap says "PROJ-123: 2 updates behind"
+
+That work item missed the last two snapshots, usually because the posts failed or the transitions ran in another clone. The next transition catches it up. To catch up now, run `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>` with the stage the change is at.
 
 ### `/implement` picks the wrong ticket
 

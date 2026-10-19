@@ -58,6 +58,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    - **Language**: the language Claude talks to you in: English, Spanish or another one. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
    - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. The installer proposes `npm test` when `package.json` has a test script; choose "None" if the project has no checks yet. You can set it later in `.claude/agent-workflow.json`.
    - **Pull requests**: how `/close-change` opens them: GitHub (`gh`), GitLab (`glab`), Bitbucket (Atlassian's MCP server), another MCP server connected to Claude Code, a command of your own, or "None" to open them yourself in your code host. When your remote is on GitHub or GitLab and its CLI is installed, that host is the default. If the CLI is missing or you pick an MCP server, the installer adds how to install or connect it to its next steps. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders for your own command.
+   - **Team tracker**: how Claude posts each change's progress to the work items it references. Type `none` (the default), `mcp:<server>` for an MCP server connected to Claude Code, or a command of your own, such as `my-tracker comment {ref} --body-file {messageFile}`. The installer lists the servers in `.mcp.json` as hints, and before accepting anything but `none` it shows what a post will look like. [What gets installed](./what-gets-installed.md#team-tracker) lists the placeholders.
    - **Optional skills**: one list with the reason for each skill. Type the numbers of the topics your project touches, separated by commas, `all`, or press Enter for none. You can run the installer again later to add more.
    - **Status line**: whether Claude Code's status line shows where the change of the current branch stands, such as `add-greeting · 2/4 · next #3`. The default is yes. The installer saves it in `.claude/settings.local.json`, so your team does not get it. If you have a status line of your own in `~/.claude/settings.json`, it asks instead whether to use the kit's in this project only, with no as the default ([Status line](./what-gets-installed.md#status-line)).
 5. Look at what it created and commit it:
@@ -78,10 +79,10 @@ The installer never overwrites an existing file without asking. Run it again at 
 ### Options for automation
 
 ```powershell
-npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --optional none
+npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --tracker none --optional none
 ```
 
-`--yes` accepts every default and keeps every existing file. It leaves out the status line, a personal preference. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
+`--yes` accepts every default and keeps every existing file. It leaves out the status line, a personal preference. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--tracker` takes `none`, `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
 
 ## 3. Install the kit in an existing project
 
@@ -188,7 +189,7 @@ Review the pull request in your code host and merge it.
 
 When your team plans its work in Jira, Linear, GitHub Issues, Azure Boards or any other tool, link the change to the **work items** it serves. Name each one by its **external reference**, written as your team writes it: `PROJ-123`, `#42`, `AB#987`, `ENG-7` or a URL.
 
-- **From the start**: give the reference to the interview, for example `/grill-with-docs PROJ-123`. Claude asks you to paste the work item's title and description, interviews you from there, and `/to-spec` writes the reference into the change.
+- **From the start**: give the reference to the interview, for example `/grill-with-docs PROJ-123`. Claude reads the work item's title and description through the `tracker` channel, or asks you to paste them when there is none, interviews you from there, and `/to-spec` writes the reference into the change.
 - **Later**: ask Claude to link `PROJ-123` to the change, or add it yourself to `openspec/changes/<change>/.openspec.yaml` and commit `docs(<change>): link PROJ-123`.
 
 ```yaml
@@ -231,6 +232,23 @@ Work items: PROJ-123
 ```
 
 On a change branch it prints that change; elsewhere, every change in flight, or the one you name with `--report remove-todo`. It holds only the name, the stage, the tickets done and the references: nothing from the spec or the tickets leaves the repository.
+
+### Post progress to the work items
+
+With a `tracker` channel set, Claude posts the change's snapshot to each work item it references, right after the spec, the tickets, each finished ticket and the hand-over: `remove-todo: 2 of 4 tickets done`. It shows each post and does not ask, since choosing the channel was the permission:
+
+```
+Posted to PROJ-123: 2 of 4 tickets done
+```
+
+The channel is whatever reaches your tracker. One example of each kind:
+
+```json
+"tracker": { "via": "mcp", "server": "<the server's name in Claude Code>" }
+"tracker": { "via": "cli", "command": "my-tracker comment {ref} --body-file {messageFile}" }
+```
+
+When a post fails, Claude says so, gives you the snapshot to paste, and the workflow goes on. A snapshot already posted is not posted again, and the next one covers a missed one. The roadmap shows a work item that is behind: `PROJ-123: 2 updates behind`. The kit never moves a work item's state; a command of your own may, from `{stage}`. [What gets installed](./what-gets-installed.md#team-tracker) has the details.
 
 ### Outside a change
 

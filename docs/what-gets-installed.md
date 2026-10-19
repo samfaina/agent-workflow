@@ -11,7 +11,7 @@ The installer puts two kinds of things into your project. The **kit**'s own piec
 | `.claude/hooks/agent-workflow/` | The hooks and the status module (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
 | `.claude/settings.local.json` | Your conversation language and, if you accept it, the status line (see [Status line](#status-line)), merged into your local settings if the file exists; added to `.gitignore` |
-| `.claude/agent-workflow.json` | Workflow configuration: protected branches, push, check command, how pull requests are opened, protected paths |
+| `.claude/agent-workflow.json` | Workflow configuration: protected branches, push, check command, how pull requests are opened, how progress reaches the team tracker, protected paths |
 | `docs/agents/issue-tracker.md` | The **adapter**: how Matt's skills read and write OpenSpec |
 | `docs/agents/domain.md` | Where the skills find the glossary, ADRs and living spec |
 | `AGENTS.md`, `CLAUDE.md` | Workflow, git rules, language and specialist skills, between `agent-workflow` markers |
@@ -100,6 +100,7 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
   "allowPush": false,
   "checkCommand": "npm test",
   "pullRequest": { "via": "none" },
+  "tracker": { "via": "none" },
   "protectedPaths": [".env", ".env.*", ".claude/settings.json", "openspec/specs/**", "..."]
 }
 ```
@@ -123,6 +124,8 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 | `node .claude/hooks/agent-workflow/status.mjs` | The roadmap of each active change, the one on the current branch first |
 | `node .claude/hooks/agent-workflow/status.mjs --json` | The same snapshot as JSON, for scripts |
 | `node .claude/hooks/agent-workflow/status.mjs --statusline` | One line for the change of the current branch, for Claude Code's status line; nothing off a `change/*` branch |
+| `node .claude/hooks/agent-workflow/status.mjs --report [<change>]` | The snapshot of a change as text to paste into a work item |
+| `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>` | Posts the snapshot to the change's work items through `tracker`; Claude runs it after each transition (see [Team tracker](#team-tracker)) |
 
 `/to-tickets` and `/implement` end by pasting its roadmap, and `/now-what` reads its `--json` output. When the project has a `package.json`, the installer offers to add the script `"workflow:status": "node .claude/hooks/agent-workflow/status.mjs"`, so `npm run workflow:status` prints the roadmap; running the installer again offers it again if it is missing. Without `package.json`, the installer prints an alias to create instead:
 
@@ -178,3 +181,41 @@ The installer asks for this setting with a list: GitHub (the `gh` command above)
 With a remote and any value, the push stays yours unless `allowPush` is `true`. In a project with no remote, `/close-change` ignores the setting and gives you the commands to merge the branch locally. Unless your Claude Code permissions already allow them, Claude Code also asks before Claude runs the command or calls the MCP tool.
 
 When the hand-over does not finish, run `/close-change <change>` again to finish it: see [Troubleshooting](./troubleshooting.md#close-change-archived-the-change-but-the-pull-request-was-never-opened).
+
+## Team tracker
+
+The `tracker` setting in `.claude/agent-workflow.json` tells Claude how to post a change's **progress snapshot** to the work items it references. It posts in one direction only: it never reads a work item's state back, never moves it and never creates one. The kit knows no tracker, so the project brings the channel.
+
+| Value | What Claude does |
+| --- | --- |
+| `{ "via": "none" }` (default, and what a missing setting means) | Posts nothing. `--report` prints the snapshot to paste by hand. |
+| `{ "via": "mcp", "server": "..." }` | Posts the snapshot as a comment on each work item through the tool of that MCP server. The server must be connected to Claude Code. |
+| `{ "via": "cli", "command": "..." }` | Runs `command` once per work item, with its placeholders filled in, from the project folder: in `cmd.exe` on Windows, `sh` elsewhere. It must not ask for input, and it is stopped after 60 seconds. |
+
+The command can use eight placeholders, each quoted for the shell when it is filled in: `{ref}` (the external reference), `{change}`, `{stage}`, `{done}` and `{total}` (the tickets done and in all), `{url}` (the pull request, on `change-closed`), `{message}` (the snapshot as text) and `{messageFile}` (the path of a temporary file holding it). For example:
+
+```json
+"tracker": { "via": "none" }
+"tracker": { "via": "mcp", "server": "<the server's name in Claude Code>" }
+"tracker": { "via": "cli", "command": "my-tracker comment {ref} --body-file {messageFile}" }
+```
+
+Claude posts right after the commit of four transitions. The status module writes the text, never Claude, and it holds only state: nothing from the spec or the tickets leaves the repository.
+
+| `{stage}` | When | Message |
+| --- | --- | --- |
+| `spec-published` | `/to-spec` published the change | `add-greeting: spec published` |
+| `tickets-published` | `/to-tickets` published the tickets | `add-greeting: 0 of 4 tickets done` |
+| `ticket-done` | `/implement` finished a ticket, the manual test included | `add-greeting: 2 of 4 tickets done` |
+| `change-closed` | `/close-change` handed the branch over | `add-greeting: finished, pull request <url>`, `finished, merged locally` without a remote, or `finished, ready for review` |
+
+A command that wants to move the work item's state can do so itself from `{stage}`; the kit never does.
+
+- **Authorization**: choosing a `tracker` other than `none` is the authorization. Claude shows each post (`Posted to PROJ-123: 2 of 4 tickets done`) and does not ask before it. `allowPush` does not apply, because nothing is pushed.
+- **Failures**: a failed post never stops the workflow. Claude says so in one line, gives you the snapshot to paste, and goes on.
+- **Duplicates**: a ledger, `agent-workflow/tracker.json` in git's common directory (`git rev-parse --git-common-dir`), keeps the last snapshot posted per change and work item. Every worktree of the clone shares it, and it is never committed. A snapshot equal to the last one is not posted again. A missed one needs no retry, because the next one carries the whole state. Another clone starts with an empty ledger and may repeat a comment.
+- **Lag**: while a work item has missed snapshots, the roadmap says so under the change, for example `PROJ-123: 2 updates behind`.
+
+The installer asks one question, with `none` as the default: type `none`, `mcp:<server>` or a command. It lists the servers in the project's `.mcp.json` as hints and recognises no tracker CLI. Before accepting anything other than `none`, it shows what one post will look like and asks you to confirm. Pass the answer with `--tracker` instead. In a project that already has the kit, running the installer again asks only while `tracker` is missing.
+
+When a change starts from a work item and a channel is set, Claude reads the work item's title and description through it; otherwise it asks you to paste them.

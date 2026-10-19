@@ -3,6 +3,7 @@
   "allowPush": false,
   "checkCommand": "{{CHECK_COMMAND}}",
   "pullRequest": "{{PULL_REQUEST}}",
+  "tracker": "{{TRACKER}}",
   "protectedPaths": [
     ".env",
     ".env.*",

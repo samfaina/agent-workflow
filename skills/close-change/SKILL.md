@@ -95,3 +95,7 @@ Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is
      - `cli`: take `command` and replace `{base}`, `{branch}`, `{title}` and `{body}` with the base branch, `change/<change>`, the title and the body, each quoted for the shell you run it in. For `{bodyFile}`, write the body to a temporary file outside the repository and use its path. Run the command.
      - `mcp`: use the tool of the MCP server named in `server` that creates a pull request (or merge request), with `change/<change>` as the source, the base branch as the target, and the title and body. When that server or such a tool is not available, say so.
   3. Show the pull request's URL. When opening it failed, show the error and fall back to the `none` case: give the title and body for the user to open it by hand.
+
+### 9. Project the hand-over
+
+Once the hand-over of step 8 is done (the merge commands given, the title and body given, or the pull request opened), project `change-closed` as **Projection** in the adapter says: run `node .claude/hooks/agent-workflow/status.mjs --project change-closed <change>`, adding `--url <the pull request's URL>` when step 8 opened one. The status module writes the text: `finished, pull request <url>`, `finished, merged locally` without a remote, or `finished, ready for review` otherwise. When the case of step 8 stopped to wait for the user, project once it resumes and finishes. A failed post never undoes or holds up the hand-over.

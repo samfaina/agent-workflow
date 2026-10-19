@@ -11,6 +11,7 @@ import { PassThrough } from 'node:stream';
 import { createConsoleIO } from '../installer/io.mjs';
 import { detectPullRequestPreset, parsePullRequest, pullRequestFollowUp, pullRequestQuestion } from '../installer/pull-request.mjs';
 import { sharedReferenceLinks } from '../installer/references.mjs';
+import { parseTracker } from '../installer/tracker.mjs';
 
 const KIT_HOOKS = JSON.parse(readFileSync(new URL('../templates/.claude/settings.json', import.meta.url), 'utf8')).hooks.PreToolUse;
 const STOCK_CONFIG ='schema: spec-driven\n\n# Project context (optional)\n#   context: |\n';
@@ -59,6 +60,7 @@ function quietIO(answer = false) {
     warn(message) { questions.push(`WARN ${message}`); },
     async choose({ choices, selected = 0 }) { return choices[selected].value; },
     async chooseMany() { return []; },
+    async ask({ fallback = '' }) { return fallback; },
     async confirm(question, fallback = false, detail = '') {
       questions.push(detail ? `${question} ${detail}` : question);
       defaults.push([question, fallback]);
@@ -69,7 +71,7 @@ function quietIO(answer = false) {
 }
 
 // `homeDir` stands in for the user's home, so the real ~/.claude/settings.json is never read.
-async function install(projectDir, { answer = false, optional = 'none', pullRequest, statusLine, homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-')), initFrom = init } = {}) {
+async function install(projectDir, { answer = false, optional = 'none', pullRequest, tracker, statusLine, homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-')), initFrom = init } = {}) {
   const tools = fakeTools(projectDir);
   const io = quietIO(answer);
   await initFrom({
@@ -80,6 +82,7 @@ async function install(projectDir, { answer = false, optional = 'none', pullRequ
     language: 'Spanish',
     checkCommand: 'npm test',
     pullRequest,
+    tracker,
     statusLine,
     homeDir,
     optional,
@@ -384,8 +387,8 @@ describe('installer pull request setting', () => {
     mkdirSync(path.join(dir, '.claude'), { recursive: true });
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
     const { io } = await install(dir, { answer: true, pullRequest: 'mcp:bitbucket' });
-    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, pullRequest: { via: 'mcp', server: 'bitbucket' } });
-    assert.ok(io.questions.some((q) => q.startsWith('Add pullRequest to .claude/agent-workflow.json?')));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, pullRequest: { via: 'mcp', server: 'bitbucket' }, tracker: { via: 'none' } });
+    assert.ok(io.questions.some((q) => q.startsWith('Add pullRequest, tracker to .claude/agent-workflow.json?')));
   });
 
   it('does not ask again when the config already has the setting', async () => {
@@ -402,20 +405,103 @@ describe('installer pull request setting', () => {
   });
 });
 
+describe('installer tracker setting', () => {
+  it('parses none, mcp:<server> and commands', () => {
+    assert.deepEqual(parseTracker(''), { via: 'none' });
+    assert.deepEqual(parseTracker(' none '), { via: 'none' });
+    assert.deepEqual(parseTracker('mcp:jira'), { via: 'mcp', server: 'jira' });
+    assert.deepEqual(parseTracker('mcp: linear '), { via: 'mcp', server: 'linear' });
+    assert.deepEqual(parseTracker('my-tracker comment {ref} --body-file {messageFile}'), { via: 'cli', command: 'my-tracker comment {ref} --body-file {messageFile}' });
+    assert.throws(() => parseTracker('mcp:'), /name of the MCP server/);
+  });
+
+  it('stores the setting given with --tracker', async () => {
+    const dir = newProject();
+    await install(dir, { pullRequest: 'none', tracker: 'mcp:jira' });
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')).tracker, { via: 'mcp', server: 'jira' });
+  });
+
+  // Answers the tracker question with `answers` in turn and each sample with `accept` in turn.
+  function trackerIO(answers, accept) {
+    const io = quietIO();
+    const asked = [];
+    return {
+      ...io,
+      asked,
+      async ask(question) { asked.push(question); return answers.shift(); },
+      async confirm(question, fallback, detail) {
+        io.questions.push(`${question} ${detail}`);
+        return question.startsWith('Post progress like this?') ? accept.shift() : false;
+      },
+    };
+  }
+
+  const initWith = (dir, io, options = {}) => init({
+    projectDir: dir, io, run: fakeTools(dir).run, fetchText: async () => '', language: 'English', checkCommand: 'npm test', pullRequest: 'none', optional: 'none', nextSteps: false, ...options,
+  });
+
+  it('asks with the syntax of a command, the .mcp.json servers as hints, and none by default', async () => {
+    const dir = newProject();
+    writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { jira: {}, linear: {} } }));
+    const io = trackerIO(['none'], []);
+    await initWith(dir, io);
+    const [question] = io.asked;
+    assert.equal(question.title, 'Team tracker');
+    assert.equal(question.fallback, 'none');
+    assert.ok(question.detail.startsWith('How should the kit post progress to your team tracker? Type "none", "mcp:<server>", or a command using {ref}, {stage}, {message}, {messageFile}'), question.detail);
+    assert.ok(question.detail.endsWith('(for example: my-tracker comment {ref} --body-file {messageFile})'), question.detail);
+    assert.ok(question.lines.includes('MCP servers in .mcp.json: jira, linear'), question.lines.join(' | '));
+    assert.ok(!io.questions.some((q) => q.startsWith('Post progress like this?')), 'none needs no sample');
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')).tracker, { via: 'none' });
+  });
+
+  it('shows a sample snapshot before accepting a channel, and asks again when it is refused or invalid', async () => {
+    const dir = newProject();
+    const command = 'my-tracker comment {ref} --body-file {messageFile}';
+    const io = trackerIO(['mcp:', 'mcp:jira', command], [false, true]);
+    await initWith(dir, io);
+    assert.equal(io.asked.length, 3);
+    assert.ok(io.questions.some((q) => q.startsWith('WARN mcp: needs the name of the MCP server')));
+    const samples = io.questions.filter((q) => q.startsWith('Post progress like this?'));
+    assert.equal(samples.length, 2);
+    assert.match(samples[0], /`jira` MCP server/);
+    assert.match(samples[0], /add-greeting: 2 of 4 tickets done/);
+    assert.match(samples[1], /my-tracker comment .PROJ-123. --body-file /);
+    assert.match(samples[1], /add-greeting: 2 of 4 tickets done/);
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')).tracker, { via: 'cli', command });
+  });
+
+  it('asks again on a re-run only when the config has no tracker', async () => {
+    const dir = newProject();
+    const config = { protectedBranches: ['main'], allowPush: false, checkCommand: 'npm test', pullRequest: { via: 'none' }, protectedPaths: [] };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
+    const io = { ...trackerIO(['mcp:jira'], []), async confirm() { return true; } };
+    await initWith(dir, io, { pullRequest: undefined });
+    assert.deepEqual(io.asked.map((q) => `${q.step} ${q.title}`), ['3/3 Team tracker']);
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...config, tracker: { via: 'mcp', server: 'jira' } });
+    const again = trackerIO([], []);
+    await initWith(dir, again, { pullRequest: undefined });
+    assert.equal(again.asked.length, 0);
+  });
+});
+
 describe('installer questions', () => {
-  it('asks the three questions as numbered steps and stores the answers', async () => {
+  it('asks the four questions as numbered steps and stores the answers', async () => {
     const dir = newProject();
     const tools = fakeTools(dir);
     const asked = [];
     const io = {
       ...quietIO(),
       async choose(question) { asked.push(`${question.step} ${question.title}`); return question.choices[question.selected ?? 0].value; },
+      async ask(question) { asked.push(`${question.step} ${question.title}`); return question.fallback; },
     };
     await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', optional: 'none', nextSteps: false });
-    assert.deepEqual(asked, ['1/3 Language', '2/3 Check command', '3/3 Pull requests']);
+    assert.deepEqual(asked, ['1/4 Language', '2/4 Check command', '3/4 Pull requests', '4/4 Team tracker']);
     const config = JSON.parse(read(dir, '.claude/agent-workflow.json'));
     assert.equal(config.checkCommand, '', 'with nothing detected, none is the default');
     assert.deepEqual(config.pullRequest, { via: 'none' });
+    assert.deepEqual(config.tracker, { via: 'none' });
     assert.equal(JSON.parse(read(dir, '.claude/settings.local.json')).language, 'english');
   });
 
@@ -481,6 +567,15 @@ describe('console prompts', () => {
     assert.equal((await consoleSession(['3', '', '2'], (io) => io.choose(language))).result, 'Spanish');
     const server = { title: 'PR', choices: [{ label: 'Bitbucket', input: { label: 'Server', fallback: 'atlassian', value: (n) => `mcp:${n}` } }] };
     assert.equal((await consoleSession(['1', ''], (io) => io.choose(server))).result, 'mcp:atlassian');
+  });
+
+  it('reads a free-text answer under its notes, the fallback on Enter or once the input ends', async () => {
+    const tracker = { step: '4/4', title: 'Team tracker', detail: 'How should the kit post progress?', lines: ['{ref}  the reference'], fallback: 'none' };
+    const { result, shown } = await consoleSession(['mcp:jira'], (io) => io.ask(tracker));
+    assert.equal(result, 'mcp:jira');
+    assert.match(shown, /\[4\/4\] Team tracker\n {6}How should the kit post progress\?\n\n {4}\{ref\} {2}the reference\n {2}Answer \[none\]: /);
+    assert.equal((await consoleSession([''], (io) => io.ask(tracker))).result, 'none');
+    assert.equal((await consoleSession([], (io) => io.ask(tracker))).result, 'none');
   });
 
   it('takes the default once the input ends', async () => {

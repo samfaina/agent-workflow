@@ -12,7 +12,9 @@ Planned work goes through one **change** at a time:
 
 Not sure what comes next? `/now-what`
 
-A change may start from a **work item** in the team tracker (Jira, Linear, GitHub Issues...). When the user gives its external reference (`PROJ-123`, `#42`, a URL), ask them to paste the work item's title and description, interview from that, and keep the reference: `/to-spec` writes it into the change. Never create work items.
+A change may start from a **work item** in the team tracker (Jira, Linear, GitHub Issues...). When the user gives its external reference (`PROJ-123`, `#42`, a URL), read the work item's title and description through the `tracker` channel in `.claude/agent-workflow.json`, or ask the user to paste them when there is none (see **External references** in `docs/agents/issue-tracker.md`). Interview from that, and keep the reference: `/to-spec` writes it into the change. Never create work items.
+
+After the spec, the tickets, each finished ticket and the hand-over, the agent posts the change's progress to the work items it references, through that channel (**Projection** in `docs/agents/issue-tracker.md`).
 
 Specs and tickets live in OpenSpec (`openspec/`), reached only through the steps above. `docs/agents/issue-tracker.md` says how.
 

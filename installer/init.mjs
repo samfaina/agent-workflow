@@ -8,6 +8,7 @@ import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
 import { addPackageScript, ensureGitignored, mergeSettings, settingsHave, writeBlockSafely, writeFileSafely, writeLanguageSetting, writeLocalSetting } from './files.mjs';
 import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
+import { askTracker, parseTracker } from './tracker.mjs';
 
 export const KIT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(KIT_ROOT, 'templates');
@@ -45,6 +46,7 @@ export async function init({
   language,
   checkCommand,
   pullRequest,
+  tracker,
   statusLine,
   homeDir = homedir(),
   optional,
@@ -58,10 +60,13 @@ export async function init({
   if (!existsSync(path.join(projectDir, '.git'))) {
     io.warn('This folder is not a git repository. The hooks expect one: run `git init` first.');
   }
-  // A project that already chose how pull requests are opened is not asked again.
+  // A project that already chose how pull requests are opened, or how progress
+  // reaches its team tracker, is not asked again.
   const workflowConfigFile = path.join(claudeDir, 'agent-workflow.json');
-  const askPullRequest = pullRequest === undefined && !('pullRequest' in (readWorkflowConfig(workflowConfigFile) ?? {}));
-  const steps = askPullRequest ? 3 : 2;
+  const existingConfig = readWorkflowConfig(workflowConfigFile) ?? {};
+  const askPullRequest = pullRequest === undefined && !('pullRequest' in existingConfig);
+  const askTrackerQuestion = tracker === undefined && !('tracker' in existingConfig);
+  const steps = 2 + askPullRequest + askTrackerQuestion;
   language ??= await io.choose({
     step: `1/${steps}`,
     title: 'Language',
@@ -88,6 +93,9 @@ export async function init({
   const pullRequestSetting = parsePullRequest(pullRequest ?? 'none');
   const followUp = pullRequest === undefined ? null : pullRequestFollowUp(pullRequestSetting, projectDir, run);
   if (followUp?.warning) io.warn(followUp.warning);
+  const trackerSetting = askTrackerQuestion
+    ? await askTracker({ io, projectDir, step: `${steps}/${steps}` })
+    : parseTracker(tracker ?? 'none');
 
   // 2. OpenSpec
   io.log('\nOpenSpec');
@@ -159,9 +167,12 @@ export async function init({
   await writeLanguageSetting(path.join(claudeDir, 'settings.local.json'), language, ctx);
   if (statusLine !== false) await offerStatusLine({ ...ctx, homeDir });
   ensureGitignored(projectDir, '.claude/settings.local.json', ctx);
+  // A setting object on one line, as the template's other values are.
+  const inline = (setting) => JSON.stringify(setting, null, 1).replace(/\n\s*/g, ' ');
   const workflowConfig = template('.claude/agent-workflow.json')
     .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
-    .replace('"{{PULL_REQUEST}}"', JSON.stringify(pullRequestSetting, null, 1).replace(/\n\s*/g, ' '));
+    .replace('"{{PULL_REQUEST}}"', inline(pullRequestSetting))
+    .replace('"{{TRACKER}}"', inline(trackerSetting));
   if (existsSync(workflowConfigFile)) await mergeWorkflowConfig(workflowConfigFile, JSON.parse(workflowConfig), ctx);
   else await writeFileSafely(workflowConfigFile, workflowConfig, ctx);
 

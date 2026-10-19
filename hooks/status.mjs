@@ -6,9 +6,14 @@
 //   node .claude/hooks/agent-workflow/status.mjs --json         the snapshot as JSON
 //   node .claude/hooks/agent-workflow/status.mjs --statusline   one line for Claude Code's status line
 //   node .claude/hooks/agent-workflow/status.mjs --report       the text to paste into a team tracker
-import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+//   node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>
+//                                                               posts the snapshot to the change's work items
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import { currentBranch, git, loadConfig, projectDirFor } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
@@ -172,14 +177,17 @@ export function readStatus(projectDir) {
   const config = loadConfig(projectDir);
   const branch = currentBranch(projectDir);
   const installed = existsSync(path.join(projectDir, 'openspec')) && existsSync(path.join(projectDir, '.claude', 'agent-workflow.json'));
+  // Work items lag only behind a tracker the agent posts to.
+  const ledger = (config.tracker?.via ?? 'none') === 'none' ? null : readLedger(ledgerFile(projectDir));
   const changes = activeChanges(projectDir)
     .map((name) => {
       const dir = path.join(projectDir, 'openspec', 'changes', name);
-      return {
+      const change = {
         ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
         references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
         current: branch === `change/${name}`,
       };
+      return { ...change, behind: ledger ? updatesBehind(change, ledger) : {} };
     })
     // The change in hand comes first; the sort is stable, so the rest keep name order.
     .sort((a, b) => b.current - a.current);
@@ -219,6 +227,7 @@ function changeRoadmap(change, marked) {
     lines.push(`  ${MARKS[t.state]} ${note ? labels[i].padEnd(width) + note : labels[i]}`);
   });
   if (change.frontier === null) lines.push(`  next: ${change.next}`);
+  for (const [reference, behind] of Object.entries(change.behind)) lines.push(`  ${reference}: ${behind} update${behind > 1 ? 's' : ''} behind`);
   return lines.join('\n');
 }
 
@@ -253,10 +262,164 @@ const STAGE_LABELS = {
 export function formatSnapshot(change) {
   return [
     `Change: ${change.name}`,
-    `Stage: ${STAGE_LABELS[change.stage]}`,
+    `Stage: ${change.handOver ? `finished, ${change.handOver}` : STAGE_LABELS[change.stage]}`,
     `Tickets done: ${change.ticketsDone} of ${change.ticketsTotal}`,
     ...(change.references.length ? [`Work items: ${change.references.join(', ')}`] : []),
   ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Projection
+
+// The transitions after whose commit the agent projects (ADR 0008).
+export const PROJECTION_STAGES = ['spec-published', 'tickets-published', 'ticket-done', 'change-closed'];
+const COMMAND = 'node .claude/hooks/agent-workflow/status.mjs';
+const NO_TRACKER = { via: 'none' };
+const POST_TIMEOUT_MS = 60_000;
+
+// A change's folder: the active one, else its latest archive once /close-change has archived it.
+function changeDir(projectDir, name) {
+  const changes = path.join(projectDir, 'openspec', 'changes');
+  if (name !== 'archive' && existsSync(path.join(changes, name))) return path.join(changes, name);
+  const archive = path.join(changes, 'archive');
+  const dated = existsSync(archive) ? readdirSync(archive).filter((d) => /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(d)?.[1] === name).sort() : [];
+  return dated.length ? path.join(archive, dated.at(-1)) : null;
+}
+
+const remoteOf = (projectDir) => {
+  const remotes = (git(projectDir, 'remote') ?? '').split('\n').filter(Boolean);
+  return remotes.includes('origin') ? 'origin' : remotes[0] ?? null;
+};
+
+// What a transition posts: only state, never spec or ticket content. `state` is
+// the message without the change name, as the agent shows each post.
+export function projectionSnapshot(change, stage, { url = '', remote = null } = {}) {
+  const handOver = stage !== 'change-closed' ? null : url ? `pull request ${url}` : remote ? 'ready for review' : 'merged locally';
+  const state = stage === 'spec-published' ? 'spec published'
+    : handOver ? `finished, ${handOver}`
+    : `${change.ticketsDone} of ${change.ticketsTotal} tickets done`;
+  return { stage, done: change.ticketsDone, total: change.ticketsTotal, url, handOver, state, message: `${change.name}: ${state}` };
+}
+
+// The ledger keeps the last snapshot posted per change and reference, in git's
+// common directory so every worktree shares it and it is never committed.
+function ledgerFile(projectDir) {
+  const common = git(projectDir, 'rev-parse', '--git-common-dir')?.trim();
+  return common ? path.join(path.resolve(projectDir, common), 'agent-workflow', 'tracker.json') : null;
+}
+
+function readLedger(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function recordPost(file, name, reference, snapshot) {
+  if (!file) return;
+  const ledger = readLedger(file);
+  ledger[name] = { ...ledger[name], [reference]: { stage: snapshot.stage, done: snapshot.done, total: snapshot.total, message: snapshot.message } };
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
+}
+
+// How many transitions a work item has missed: each transition moves a change
+// one step, from the spec (0) through the tickets published (1) and each ticket done.
+const position = ({ stage, done }) => (stage === 'spec-published' || stage === 'no-tickets' ? 0 : 1 + done);
+
+export function updatesBehind(change, ledger) {
+  const current = position({ stage: change.stage, done: change.ticketsDone });
+  return Object.fromEntries(change.references
+    .map((reference) => {
+      const last = ledger[change.name]?.[reference];
+      return [reference, current - (last ? position(last) : -1)];
+    })
+    .filter(([, behind]) => behind > 0));
+}
+
+// One value quoted for the shell the command runs in: cmd.exe on Windows, sh elsewhere.
+// cmd.exe still expands a defined %NAME% inside quotes; references and URLs rarely hold one.
+export function shellQuote(value, platform = process.platform) {
+  const text = String(value);
+  return platform === 'win32' ? `"${text.replace(/"/g, '""')}"` : `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+export function fillCommand(command, values, platform) {
+  return command.replace(/\{(ref|change|stage|done|total|url|message|messageFile)\}/g, (_, key) => shellQuote(values[key] ?? '', platform));
+}
+
+// Runs the tracker command for one reference; the reason it failed, or null.
+function postWithCommand(projectDir, command, values) {
+  const messageDir = mkdtempSync(path.join(tmpdir(), 'agent-workflow-'));
+  const messageFile = path.join(messageDir, 'message.txt');
+  writeFileSync(messageFile, `${values.message}\n`);
+  try {
+    const result = spawnSync(fillCommand(command, { ...values, messageFile }), {
+      cwd: projectDir, shell: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: POST_TIMEOUT_MS,
+    });
+    if (result.error) return result.error.code === 'ETIMEDOUT' ? `timed out after ${POST_TIMEOUT_MS / 1000} s` : result.error.message;
+    if (result.status === 0) return null;
+    const detail = result.stderr.split('\n').map((l) => l.trim()).find(Boolean);
+    return `exit code ${result.status}${detail ? `: ${detail}` : ''}`;
+  } finally {
+    rmSync(messageDir, { recursive: true, force: true });
+  }
+}
+
+// Projects a transition of change `name` onto its work items, through the
+// `tracker` setting. Returns the text to show; '' when there is nothing to post.
+// Never throws for a failed post: the workflow goes on, with the text to paste.
+export function project(projectDir, { stage, name, url = '', posted = null }) {
+  const dir = changeDir(projectDir, name);
+  if (!dir) throw new Error(`No change named ${name}.`);
+  const tracker = loadConfig(projectDir).tracker ?? NO_TRACKER;
+  const change = {
+    ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
+    references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
+  };
+  const snapshot = projectionSnapshot(change, stage, { url, remote: remoteOf(projectDir) });
+  const ledger = ledgerFile(projectDir);
+  const toPaste = formatSnapshot({ ...change, handOver: snapshot.handOver });
+  if (posted !== null) {
+    if (!change.references.includes(posted)) throw new Error(`${posted} is not an external reference of ${name}.`);
+    recordPost(ledger, name, posted, snapshot);
+    return `Posted to ${posted}: ${snapshot.state}`;
+  }
+  if (tracker.via === 'none' || !change.references.length) return '';
+  const last = readLedger(ledger)[name] ?? {};
+  const pending = change.references.filter((reference) => last[reference]?.message !== snapshot.message);
+  if (!pending.length) return '';
+  // One line per work item that missed the snapshot, then the text to paste into them.
+  const withPaste = (lines, refs) => [...lines, `Paste this into ${refs.length > 1 ? 'them' : 'it'} instead:`, toPaste].join('\n');
+
+  if (tracker.via === 'mcp' && tracker.server) {
+    const urlOption = url ? ` --url ${shellQuote(url)}` : '';
+    return [
+      `Post to ${pending.join(', ')} with the \`${tracker.server}\` MCP server: ${snapshot.message}`,
+      `After each post, run: ${COMMAND} --project ${stage} ${name}${urlOption} --posted "<reference>"`,
+      'If a post fails, paste this into the work item instead:',
+      toPaste,
+    ].join('\n');
+  }
+  if (tracker.via !== 'cli' || typeof tracker.command !== 'string' || !tracker.command.trim()) {
+    return withPaste([`Could not post to ${pending.join(', ')} (tracker in .claude/agent-workflow.json is not none, mcp:<server> or a command).`], pending);
+  }
+  const lines = [];
+  const missed = [];
+  for (const reference of pending) {
+    const reason = postWithCommand(projectDir, tracker.command, {
+      ref: reference, change: name, stage, done: snapshot.done, total: snapshot.total, url, message: snapshot.message,
+    });
+    if (reason) {
+      missed.push(reference);
+      lines.push(`Could not post to ${reference} (${reason}).`);
+    } else {
+      recordPost(ledger, name, reference, snapshot);
+      lines.push(`Posted to ${reference}: ${snapshot.state}`);
+    }
+  }
+  return missed.length ? withPaste(lines, missed) : lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +453,22 @@ function readSessionData() {
 // ---------------------------------------------------------------------------
 // Command
 
-const USAGE = 'Usage: node .claude/hooks/agent-workflow/status.mjs [--json | --statusline | --report [<change>]]';
+const USAGE = [
+  'Usage: node .claude/hooks/agent-workflow/status.mjs [--json | --statusline | --report [<change>]]',
+  `       node .claude/hooks/agent-workflow/status.mjs --project <${PROJECTION_STAGES.join(' | ')}> <change> [--url <url>] [--posted <reference>]`,
+].join('\n');
+
+// `--project <stage> <change> [--url <url>] [--posted <reference>]`, parsed; null when invalid.
+function projectArgs(args) {
+  try {
+    const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { url: { type: 'string' }, posted: { type: 'string' } } });
+    const [stage, name] = positionals;
+    if (positionals.length !== 2 || !PROJECTION_STAGES.includes(stage)) return null;
+    return { stage, name, url: values.url ?? '', posted: values.posted ?? null };
+  } catch {
+    return null;
+  }
+}
 
 // The snapshot of the change named, else of the current branch's change, else of every active change.
 function snapshotToPaste(status, name) {
@@ -303,7 +481,9 @@ function snapshotToPaste(status, name) {
 }
 
 function main(args) {
-  const valid = args[0] === '--report' ? args.length <= 2 && !args[1]?.startsWith('-')
+  const projection = args[0] === '--project' ? projectArgs(args.slice(1)) : null;
+  const valid = args[0] === '--project' ? projection !== null
+    : args[0] === '--report' ? args.length <= 2 && !args[1]?.startsWith('-')
     : args.length <= 1 && args.every((a) => a === '--json' || a === '--statusline');
   if (!valid) {
     process.stderr.write(`${USAGE}\n`);
@@ -312,6 +492,16 @@ function main(args) {
   }
   // Claude Code's project, or the repository around the current folder.
   const findProjectDir = () => projectDirFor({ cwd: git(process.cwd(), 'rev-parse', '--show-toplevel')?.trim() });
+  if (projection) {
+    try {
+      const text = project(findProjectDir(), projection);
+      if (text) process.stdout.write(`${text}\n`);
+    } catch (error) {
+      process.stderr.write(`${error.message}\n`);
+      process.exitCode = 1;
+    }
+    return;
+  }
   if (args[0] === '--statusline') {
     // A status line gets no CLAUDE_PROJECT_DIR: its session data names the project.
     // No output leaves the status line blank.
