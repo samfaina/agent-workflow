@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { currentRun, nextTrialDir, resultsName } from '../scripts/experiment/setup.mjs';
-import { frontier, isDone, parseTickets } from '../scripts/experiment/tickets.mjs';
+import { frontier, isDone, parseTickets } from '../hooks/status.mjs';
 import { allRuns, latestRun, loadedFromProject, transcriptDir } from '../scripts/experiment/transcript.mjs';
 import { asksAfterList, hasReviewHeadings, nextCommand } from '../scripts/experiment/checks.mjs';
 

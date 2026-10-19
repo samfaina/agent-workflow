@@ -49,9 +49,11 @@ function fakeTools(projectDir) {
 // Answers every confirmation with `answer` and records the questions.
 function quietIO(answer = false) {
   const questions = [];
+  const logs = [];
   return {
     questions,
-    log() {},
+    logs,
+    log(message = '') { logs.push(message); },
     warn(message) { questions.push(`WARN ${message}`); },
     async choose({ choices, selected = 0 }) { return choices[selected].value; },
     async chooseMany() { return []; },
@@ -195,6 +197,55 @@ describe('installer in an existing project', () => {
     const scripts = (list, matcher) => list.filter((g) => g.matcher === matcher).flatMap((g) => g.hooks.map((h) => path.basename(h.args[0]))).sort();
     assert.equal(groups.length, KIT_HOOKS.length, 'no duplicate groups');
     for (const { matcher } of KIT_HOOKS) assert.deepEqual(scripts(groups, matcher), scripts(KIT_HOOKS, matcher), matcher);
+  });
+});
+
+describe('installer status command', () => {
+  const STATUS_SCRIPT = 'node .claude/hooks/agent-workflow/status.mjs';
+
+  function nodeProject(scripts) {
+    const dir = newProject();
+    writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify({ name: 'demo', scripts }, null, 4)}\n`);
+    return dir;
+  }
+
+  it('installs the status module with the hooks', async () => {
+    const dir = newProject();
+    await install(dir);
+    assert.ok(existsSync(path.join(dir, '.claude', 'hooks', 'agent-workflow', 'status.mjs')));
+  });
+
+  it('adds a workflow:status script to package.json, keeping its other scripts and indentation', async () => {
+    const dir = nodeProject({ test: 'node --test' });
+    const { io } = await install(dir, { answer: true });
+    assert.ok(io.questions.some((q) => q.startsWith('Add a "workflow:status" script to package.json?')));
+    assert.equal(read(dir, 'package.json'), `${JSON.stringify({ name: 'demo', scripts: { test: 'node --test', 'workflow:status': STATUS_SCRIPT } }, null, 4)}\n`);
+
+    const again = await install(dir, { answer: true });
+    assert.ok(!again.io.questions.some((q) => q.includes('workflow:status')), 'not offered once it is there');
+  });
+
+  it('leaves package.json alone when the user says no', async () => {
+    const dir = nodeProject({ test: 'node --test' });
+    const before = read(dir, 'package.json');
+    await install(dir, { answer: false });
+    assert.equal(read(dir, 'package.json'), before);
+  });
+
+  it('asks before replacing a workflow:status script of the project\'s own', async () => {
+    const dir = nodeProject({ 'workflow:status': 'echo mine' });
+    const { io } = await install(dir, { answer: false });
+    assert.ok(io.questions.some((q) => q.startsWith('Replace the "workflow:status" script in package.json?')));
+    assert.equal(JSON.parse(read(dir, 'package.json')).scripts['workflow:status'], 'echo mine');
+  });
+
+  it('prints a shell alias when the project has no package.json', async () => {
+    const dir = newProject();
+    const { io } = await install(dir);
+    const printed = io.logs.join('\n');
+    assert.ok(printed.includes(`alias workflow-status='${STATUS_SCRIPT}'`), printed);
+    assert.ok(printed.includes(`function workflow-status { ${STATUS_SCRIPT} @args }`), printed);
+    assert.ok(!existsSync(path.join(dir, 'package.json')));
   });
 });
 

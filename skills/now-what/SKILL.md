@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Tell the user the one command that comes next. This skill is a **guide**: it diagnoses where the work stands and recommends a command, and the user runs it.
 
-It is **read-only**. Read files and run only commands that report state (`git status`, `git branch`, `git remote`, `git ls-remote`, `openspec list`, `openspec instructions`). Leave every file, branch and commit as it is: no `git switch`, `git fetch` or commit, and no Skill tool call for the recommended skill.
+It is **read-only**. Read files and run only commands that report state (`node .claude/hooks/agent-workflow/status.mjs`, `git status`, `git branch`, `openspec list`, `openspec instructions`). Leave every file, branch and commit as it is: no `git switch`, `git fetch` or commit, and no Skill tool call for the recommended skill.
 
 ## 1. Read the conversation
 
@@ -20,31 +20,32 @@ Before any command, note what this conversation already holds:
 
 ## 2. Read the repository
 
-Read `docs/agents/issue-tracker.md`: it defines changes, tickets, the **frontier ticket** and branches. Then gather:
+Run `node .claude/hooks/agent-workflow/status.mjs --json`. It prints the **progress snapshot** of the project, computed from git and the change files:
 
-- whether `openspec/` and `.claude/agent-workflow.json` exist;
-- `git status --porcelain` and `git branch --show-current`;
-- the **active changes**: `openspec list --json`; for each one, whether `openspec/changes/<change>/tasks.md` exists and which of its boxes are ticked;
-- the **base**: the first branch of `protectedBranches` in `.claude/agent-workflow.json` that exists locally;
-- the **pending hand-overs**: each branch in `git branch --list "change/*" --no-merged <base>` whose `<x>` has a folder `openspec/changes/archive/<date>-<x>/`.
+- `state`: the first state of step 3 that the repository alone decides, and `next`, its command (`null` when the next step is not a command);
+- `changes`: each active change with its `stage`, its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, and `current` when `change/<change>` is the current branch, which comes first;
+- `strayFiles`: uncommitted files outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`;
+- `handOvers`: archived change branches not merged into `base`, each `pushed` or not to `remote`.
+
+If `.claude/hooks/agent-workflow/status.mjs` is missing, the kit is missing or older than this skill: the state is **Not installed**.
 
 ## 3. Find the state
 
-Walk these states in order and stop at the first that applies.
+Walk these states in order and stop at the first that applies. The snapshot's `state` decides every state but 3, which only the conversation shows, and the map for a situation in state 9.
 
-1. **Not installed**: `openspec/` or `.claude/agent-workflow.json` is missing. Next: `npx github:samfaina/agent-workflow init`, then restart Claude Code.
-2. **Stray files**: `git status --porcelain` lists a file outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`. Next: commit or stash those files; name them.
+1. **Not installed** (`not-installed`). Next: `npx github:samfaina/agent-workflow init`, then restart Claude Code.
+2. **Stray files** (`stray-files`). Next: commit or stash the files in `strayFiles`; name them.
 3. **Grilled, not published**: the conversation holds a grilling. Next: `/to-spec <change>`, proposing a kebab-case name that starts with a verb, taken from the interview.
-4. **Context lost**: no active change, the tree is dirty only with `GLOSSARY.md` or `docs/adr/`, and the conversation holds no grilling. Next: `/grill-with-docs` to rebuild the context, then `/to-spec <change>`. Why: `/to-spec` works from the interview, which a fresh session lacks.
-5. **No tickets**: an active change has no `tasks.md`. Next: `/to-tickets <change>`.
-6. **Tickets open**: an active change has an unticked box. Next: `/implement <change>#N`, N being its frontier ticket. Find it with the rule in `docs/agents/issue-tracker.md`.
-7. **Finished**: every box of an active change is ticked. Next: `/close-change <change>`.
-8. **Hand-over pending**: a pending hand-over exists. Run `git remote`: the remote is `origin` when it is listed, otherwise the first one listed.
-   - No remote, or `git ls-remote --heads <remote> change/<x>` prints nothing: the branch is not pushed. Next: `/close-change <x>`.
-   - Otherwise the pull request waits in the code host. Next: review and merge it there; once merged, `git switch <base>` and `git pull`.
-9. **Nothing in flight**: Next: `/grill-with-docs` to start a change. When the conversation holds a situation, use **Map off the workflow** instead.
+4. **Context lost** (`context-lost`): no active change, and the tree is dirty only with `GLOSSARY.md` or `docs/adr/`. Next: `/grill-with-docs` to rebuild the context, then `/to-spec <change>`. Why: `/to-spec` works from the interview, which a fresh session lacks.
+5. **No tickets** (`no-tickets`): the change has no `tasks.md`. Next: its `next`, `/to-tickets <change>`.
+6. **Tickets open** (`tickets-open`): the change has an unticked box. Next: its `next`, `/implement <change>#N` for its frontier ticket.
+7. **Finished** (`finished`): every box of the change is ticked. Next: its `next`, `/close-change <change>`.
+8. **Hand-over pending** (`hand-over-pending`): take the first of `handOvers`.
+   - Not `pushed`: Next: `/close-change <x>`.
+   - `pushed`: the pull request waits in the code host. Next: review and merge it there; once merged, `git switch <base>` and `git pull`.
+9. **Nothing in flight** (`nothing-in-flight`). Next: `/grill-with-docs` to start a change. When the conversation holds a situation, use **Map off the workflow** instead.
 
-**Several active changes** reach states 5 to 7 together: list each change with its state and next command, and mark the one whose branch `change/<change>` is the current branch. The user picks; this skill does not ask.
+**Several active changes** reach states 5 to 7 together: list each change of `changes` with its `stage` and `next`, and mark the one that is `current`. The user picks; this skill does not ask.
 
 ## 4. Answer
 

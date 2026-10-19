@@ -65,7 +65,7 @@ docs/adr/                      decisions that are hard to reverse
 
 A change lives in `openspec/changes/<change>/` while you work on it. Archiving moves the folder to `openspec/changes/archive/` and merges its delta specs into `openspec/specs/`. Only `/close-change` does that: the living spec is a **protected path**, so Claude cannot edit it by hand.
 
-To see where a change stands, run `openspec list`. It shows ticked boxes against the total, such as `3/7 tasks`.
+To see where a change stands, run `npm run workflow:status`, or `node .claude/hooks/agent-workflow/status.mjs` in a project without `package.json`. It prints the change's **roadmap**: which tickets are done, which is the frontier ticket with the command that builds it, and which wait on a blocker. `/to-tickets` and every `/implement` end with the same roadmap, printed by the same module, so the next step never depends on what Claude remembers.
 
 ## Why a fresh session per stage
 
