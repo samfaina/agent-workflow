@@ -4,14 +4,18 @@
 // CLI (ADR 0010), so it stays fast and works where openspec is not installed.
 //   node .claude/hooks/agent-workflow/status.mjs           the roadmap of each change
 //   node .claude/hooks/agent-workflow/status.mjs --json    the snapshot as JSON
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { currentBranch, loadConfig } from './shared.mjs';
+import { currentBranch, git, loadConfig, projectDirFor } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
 // Tickets
+
+// A checkbox line as OpenSpec counts it: any list marker, any indent, a box
+// holding at most one character, of which only x or X means done. In the
+// ticket format each box is an acceptance criterion, `- [ ] N.M <text>`.
+const BOX = /^\s*(?:[-*+]|\d{1,9}[.)])\s*\[(?:\s*([^\]\s]?)\s*\](?![([])|\s+\])\s*(.*)/;
 
 // Parses a change's tasks.md in the ticket format of the adapter
 // (docs/agents/issue-tracker.md, "Ticket format").
@@ -31,8 +35,11 @@ export function parseTickets(text) {
       current.blockedBy = /^none\b/i.test(blocked[1].trim()) ? [] : (blocked[1].match(/\d+/g) ?? []).map(Number);
     }
     if (/^What to build:/i.test(line)) current.whatToBuild = true;
-    const box = line.match(/^- \[([ xX])\] (\d+)\.(\d+) (.+)$/);
-    if (box) current.boxes.push({ done: box[1].toLowerCase() === 'x', group: Number(box[2]), item: Number(box[3]), text: box[4] });
+    const box = line.match(BOX);
+    if (box) {
+      const id = box[2].match(/^(\d+)\.(\d+)\s+(.*)$/);
+      current.boxes.push({ done: /^x$/i.test(box[1] ?? ''), group: id ? Number(id[1]) : null, item: id ? Number(id[2]) : null, text: id ? id[3] : box[2] });
+    }
   }
   return tickets;
 }
@@ -49,10 +56,10 @@ export function frontier(tickets) {
 }
 
 // The progress of one change, from its tasks.md (null when it has none).
-export function changeProgress(name, tasks) {
-  const tickets = tasks === null ? [] : parseTickets(tasks);
+export function changeProgress(name, tasksMd) {
+  const tickets = tasksMd === null ? [] : parseTickets(tasksMd);
   const byNumber = new Map(tickets.map((t) => [t.number, t]));
-  const next = frontier(tickets);
+  const frontierTicket = frontier(tickets);
   const boxes = tickets.flatMap((t) => t.boxes);
   const stage = !tickets.length ? 'no-tickets' : tickets.every(isDone) ? 'finished' : 'tickets-open';
   return {
@@ -64,31 +71,22 @@ export function changeProgress(name, tasks) {
     criteriaTotal: boxes.length,
     tickets: tickets.map((t, i) => {
       const waitingOn = blockersOf(tickets, i).filter((n) => !byNumber.has(n) || !isDone(byNumber.get(n)));
-      const state = isDone(t) ? 'done' : t === next ? 'frontier' : waitingOn.length ? 'blocked' : 'ready';
+      const state = isDone(t) ? 'done' : t === frontierTicket ? 'frontier' : waitingOn.length ? 'blocked' : 'ready';
       return { number: t.number, title: t.title, state, blockedBy: blockersOf(tickets, i), waitingOn };
     }),
-    frontier: next?.number ?? null,
+    frontier: frontierTicket?.number ?? null,
     next: stage === 'no-tickets' ? `/to-tickets ${name}`
       : stage === 'finished' ? `/close-change ${name}`
-      : `/implement ${name}${next ? `#${next.number}` : ''}`,
+      : `/implement ${name}${frontierTicket ? `#${frontierTicket.number}` : ''}`,
   };
 }
 
 // ---------------------------------------------------------------------------
 // The project
 
-export const INSTALL_COMMAND = 'npx github:samfaina/agent-workflow init';
+const INSTALL_COMMAND = 'npx github:samfaina/agent-workflow init';
 
 const readIfExists = (file) => (existsSync(file) ? readFileSync(file, 'utf8') : null);
-
-// The output of a git command, or null when it fails (no repository, no such ref).
-function git(dir, ...args) {
-  try {
-    return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-  } catch {
-    return null;
-  }
-}
 
 // The active changes: every folder under openspec/changes/ except archive/.
 function activeChanges(projectDir) {
@@ -180,16 +178,16 @@ function changeRoadmap(change, marked) {
 // The developer view: the roadmap of each active change, then what stands in
 // the way or, with no change in flight, the next step.
 export function formatRoadmap(status) {
-  if (status.state === 'not-installed') return `agent-workflow is not installed in this project. Next: ${INSTALL_COMMAND}`;
+  if (status.state === 'not-installed') return `agent-workflow is not installed in this project. Next: ${status.next}`;
   const blocks = status.changes.map((c) => changeRoadmap(c, c.current && status.changes.length > 1));
   if (status.strayFiles.length) blocks.push(`Files changed outside a change: ${status.strayFiles.join(', ')}. Commit or stash them first.`);
-  if (status.state === 'context-lost') blocks.push('No change in flight, but GLOSSARY.md or docs/adr/ has uncommitted edits. Next: /grill-with-docs, then /to-spec <change>');
+  if (status.state === 'context-lost') blocks.push(`No change in flight, but GLOSSARY.md or docs/adr/ has uncommitted edits. Next: ${status.next}, then /to-spec <change>`);
   for (const h of status.handOvers) {
     blocks.push(h.pushed
       ? `${h.branch} waits for its pull request. Once it is merged: git switch ${status.base} && git pull`
       : `${h.branch} is archived and waits to be handed over. Next: /close-change ${h.change}`);
   }
-  if (status.state === 'nothing-in-flight') blocks.push('No change in flight. Next: /grill-with-docs');
+  if (status.state === 'nothing-in-flight') blocks.push(`No change in flight. Next: ${status.next}`);
   return blocks.join('\n\n');
 }
 
@@ -198,18 +196,14 @@ export function formatRoadmap(status) {
 
 const USAGE = 'Usage: node .claude/hooks/agent-workflow/status.mjs [--json]';
 
-// The project the command runs in: Claude Code's, or the repository around the current folder.
-function projectDir() {
-  return process.env.CLAUDE_PROJECT_DIR || git(process.cwd(), 'rev-parse', '--show-toplevel')?.trim() || process.cwd();
-}
-
 function main(args) {
   if (args.some((a) => a !== '--json')) {
     process.stderr.write(`${USAGE}\n`);
     process.exitCode = 1;
     return;
   }
-  const status = readStatus(projectDir());
+  // Claude Code's project, or the repository around the current folder.
+  const status = readStatus(projectDirFor({ cwd: git(process.cwd(), 'rev-parse', '--show-toplevel')?.trim() }));
   process.stdout.write(`${args.includes('--json') ? JSON.stringify(status, null, 2) : formatRoadmap(status)}\n`);
 }
 

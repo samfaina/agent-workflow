@@ -241,12 +241,17 @@ function branchAfter({ sub, args }, branch) {
   return branch;
 }
 
-export function currentBranch(dir) {
+// The output of a git command, or null when it fails (no repository, no such ref).
+export function git(dir, ...args) {
   try {
-    return execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+    return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   } catch {
     return null;
   }
+}
+
+export function currentBranch(dir) {
+  return git(dir, 'symbolic-ref', '--short', 'HEAD')?.trim() || null;
 }
 
 // Checks a whole command line. `getBranch(dir)` returns the branch in a

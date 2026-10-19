@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { skillsWhere } from '../installer/catalog.mjs';
-import { init, KIT_ROOT } from '../installer/init.mjs';
+import { init, KIT_ROOT, STATUS_COMMAND } from '../installer/init.mjs';
 import { PassThrough } from 'node:stream';
 import { createConsoleIO } from '../installer/io.mjs';
 import { detectPullRequestPreset, parsePullRequest, pullRequestFollowUp, pullRequestQuestion } from '../installer/pull-request.mjs';
@@ -201,8 +201,6 @@ describe('installer in an existing project', () => {
 });
 
 describe('installer status command', () => {
-  const STATUS_SCRIPT = 'node .claude/hooks/agent-workflow/status.mjs';
-
   function nodeProject(scripts) {
     const dir = newProject();
     writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify({ name: 'demo', scripts }, null, 4)}\n`);
@@ -219,7 +217,7 @@ describe('installer status command', () => {
     const dir = nodeProject({ test: 'node --test' });
     const { io } = await install(dir, { answer: true });
     assert.ok(io.questions.some((q) => q.startsWith('Add a "workflow:status" script to package.json?')));
-    assert.equal(read(dir, 'package.json'), `${JSON.stringify({ name: 'demo', scripts: { test: 'node --test', 'workflow:status': STATUS_SCRIPT } }, null, 4)}\n`);
+    assert.equal(read(dir, 'package.json'), `${JSON.stringify({ name: 'demo', scripts: { test: 'node --test', 'workflow:status': STATUS_COMMAND } }, null, 4)}\n`);
 
     const again = await install(dir, { answer: true });
     assert.ok(!again.io.questions.some((q) => q.includes('workflow:status')), 'not offered once it is there');
@@ -243,8 +241,8 @@ describe('installer status command', () => {
     const dir = newProject();
     const { io } = await install(dir);
     const printed = io.logs.join('\n');
-    assert.ok(printed.includes(`alias workflow-status='${STATUS_SCRIPT}'`), printed);
-    assert.ok(printed.includes(`function workflow-status { ${STATUS_SCRIPT} @args }`), printed);
+    assert.ok(printed.includes(`alias workflow-status='${STATUS_COMMAND}'`), printed);
+    assert.ok(printed.includes(`function workflow-status { ${STATUS_COMMAND} @args }`), printed);
     assert.ok(!existsSync(path.join(dir, 'package.json')));
   });
 });

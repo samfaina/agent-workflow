@@ -100,6 +100,13 @@ describe('status of one change', () => {
     ]);
   });
 
+  it('counts indented and unnumbered boxes, as OpenSpec does', () => {
+    const tasks = '## 1. A\n\nBlocked by: none\n\n- [x] 1.1 a\n  - [ ] a nested step\n* [x] starred\n\n## 2. B\n\nBlocked by: 1\n\n- [ ] 2.1 b\n';
+    const [change] = readStatus(installedProject({ changes: { 'add-steps': tasks } })).changes;
+    assert.deepEqual([change.criteriaDone, change.criteriaTotal], [2, 4]);
+    assert.deepEqual(change.tickets.map((t) => t.state), ['frontier', 'blocked'], 'an unticked nested step keeps its ticket open');
+  });
+
   it('shows an unblocked ticket after the frontier as ready', () => {
     const tasks = '## 1. A\n\nBlocked by: none\n\n- [ ] 1.1 a\n\n## 2. B\n\nBlocked by: none\n\n- [ ] 2.1 b\n';
     const [change] = readStatus(installedProject({ changes: { 'add-two': tasks } })).changes;
@@ -237,6 +244,7 @@ describe('counts against OpenSpec', { skip: !openspecInstalled && 'openspec is n
       'add-legacy': '## 1. Setup\n\n- [x] 1.1 a\n- [x] 1.2 b\n\n## 2. Core\n\n- [ ] 2.1 c\n',
       'fix-login': GREETING.replace(/- \[ \]/g, '- [x]'),
       'add-export': null,
+      'add-steps': '## 1. A\n\nBlocked by: none\n\n- [x] 1.1 a\n  - [ ] nested\n* [x] starred\n- [X] 1.2 upper\n',
     };
     const dir = installedProject({ changes });
     const listed = JSON.parse(spawnSync('openspec list --json', { cwd: dir, shell: true, encoding: 'utf8' }).stdout).changes;
