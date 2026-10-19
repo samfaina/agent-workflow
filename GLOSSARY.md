@@ -58,6 +58,14 @@ _Avoid_: subtask, todo
 A ticket that must be done before another ticket can start.
 _Avoid_: dependency, prerequisite
 
+**Frontier ticket**:
+The first ticket, in order, whose blockers are done and which still has an acceptance criterion left.
+_Avoid_: current ticket, next task
+
+**Roadmap**:
+The list of a change's tickets, marking which are done, which is the frontier ticket and which remain.
+_Avoid_: plan, progress bar
+
 **Ticket reference**:
 The name of a change, optionally followed by a ticket number, that identifies the work an agent should pick up.
 _Avoid_: issue number, ticket ID
@@ -77,6 +85,28 @@ _Avoid_: close, merge, done
 **Pull request**:
 The request, opened in the project's code host, to bring a change branch into a protected branch.
 _Avoid_: merge request, PR
+
+## Team tracker
+
+**Team tracker**:
+The tool where a team plans and follows its work outside the repository, such as Jira, Linear, GitHub Issues, Notion or a spreadsheet; never OpenSpec.
+_Avoid_: issue tracker, board, PM tool
+
+**Work item**:
+One unit of work in the team tracker, whatever the tracker calls it: story, issue, card or row.
+_Avoid_: issue, story, ticket, card
+
+**External reference**:
+The identifier of a work item exactly as the team writes it, such as `PROJ-123`, `#42`, `AB#987` or a URL.
+_Avoid_: issue key, tracker id, link
+
+**Progress snapshot**:
+The whole state of a change at one moment (its stage, how many of its tickets are done, its external references), as the developer sees it or the team tracker receives it.
+_Avoid_: status update, report, sync
+
+**Projection**:
+Posting a change's progress snapshots to the work items it references, in one direction only.
+_Avoid_: sync, mirroring
 
 ## Skills
 
