@@ -316,6 +316,46 @@ describe('status command', () => {
     assert.equal(snapshot.changes[0].tickets[3].state, 'blocked');
   });
 
+  it('prints the change of the current branch on one line with --statusline', () => {
+    const dir = installedProject({ changes: { 'add-export': null, 'add-greeting': GREETING } });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greeting');
+    const result = run(dir, '--statusline');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'add-greeting · 2/4 · next #3\n');
+  });
+
+  it('names the next command with --statusline before the tickets and once they are done', () => {
+    const dir = installedProject({ changes: { 'add-export': null, 'fix-login': GREETING.replace(/- \[ \]/g, '- [x]') } });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-export');
+    assert.equal(run(dir, '--statusline').stdout, 'add-export · no tickets · next /to-tickets\n');
+    git(dir, 'switch', '--quiet', '-c', 'change/fix-login');
+    assert.equal(run(dir, '--statusline').stdout, 'fix-login · 4/4 · next /close-change\n');
+  });
+
+  it('reads the project from the session data Claude Code sends the status line', () => {
+    const dir = installedProject({ changes: { 'add-greeting': GREETING } });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greeting');
+    const elsewhere = mkdtempSync(path.join(tmpdir(), 'aw-elsewhere-'));
+    const result = spawnSync(process.execPath, [STATUS, '--statusline'], {
+      cwd: elsewhere,
+      encoding: 'utf8',
+      env: { ...process.env, CLAUDE_PROJECT_DIR: '' },
+      input: JSON.stringify({ cwd: elsewhere, workspace: { current_dir: elsewhere, project_dir: dir } }),
+    });
+    assert.equal(result.stdout, 'add-greeting · 2/4 · next #3\n', result.stderr);
+  });
+
+  it('prints nothing with --statusline off a change branch or once the change is archived', () => {
+    const dir = installedProject({ changes: { 'add-greeting': GREETING } });
+    assert.deepEqual([run(dir, '--statusline').status, run(dir, '--statusline').stdout], [0, ''], 'on main');
+    git(dir, 'switch', '--quiet', '-c', 'change/add-export');
+    assert.equal(run(dir, '--statusline').stdout, '', 'a branch whose change does not exist');
+    const archived = installedProject();
+    git(archived, 'switch', '--quiet', '-c', 'change/add-greeting');
+    write(archived, 'openspec/changes/archive/2026-10-01-add-greeting/tasks.md', GREETING);
+    assert.equal(run(archived, '--statusline').stdout, '', 'an archived change');
+  });
+
   it('rejects an unknown option', () => {
     const result = run(installedProject(), '--nope');
     assert.equal(result.status, 1);

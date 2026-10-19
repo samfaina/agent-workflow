@@ -59,6 +59,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. The installer proposes `npm test` when `package.json` has a test script; choose "None" if the project has no checks yet. You can set it later in `.claude/agent-workflow.json`.
    - **Pull requests**: how `/close-change` opens them: GitHub (`gh`), GitLab (`glab`), Bitbucket (Atlassian's MCP server), another MCP server connected to Claude Code, a command of your own, or "None" to open them yourself in your code host. When your remote is on GitHub or GitLab and its CLI is installed, that host is the default. If the CLI is missing or you pick an MCP server, the installer adds how to install or connect it to its next steps. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders for your own command.
    - **Optional skills**: one list with the reason for each skill. Type the numbers of the topics your project touches, separated by commas, `all`, or press Enter for none. You can run the installer again later to add more.
+   - **Status line**: whether Claude Code's status line shows where the change of the current branch stands, such as `add-greeting · 2/4 · next #3`. The default is yes. The installer saves it in `.claude/settings.local.json`, so your team does not get it, and never replaces a status line you already have ([Status line](./what-gets-installed.md#status-line)).
 5. Look at what it created and commit it:
    ```powershell
    git status
@@ -80,7 +81,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --optional none
 ```
 
-`--yes` accepts every default and keeps every existing file. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
+`--yes` accepts every default and keeps every existing file. It leaves out the status line, a personal preference. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
 
 ## 3. Install the kit in an existing project
 
@@ -158,6 +159,12 @@ remove-todo · 2 of 4 tickets done
 ```
 
 With several changes in flight it shows each one, the change of the current branch first. Add `--json` for the same snapshot as JSON, for scripts.
+
+If you accepted the status line when installing, Claude Code shows the short form under the prompt while you are on `change/remove-todo`, and it updates after every message:
+
+```
+remove-todo · 2/4 · next #3
+```
 
 ### 4.4 `/implement <change>#N`: build one ticket
 

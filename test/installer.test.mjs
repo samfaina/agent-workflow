@@ -62,7 +62,8 @@ function quietIO(answer = false) {
   };
 }
 
-async function install(projectDir, { answer = false, optional = 'none', pullRequest, initFrom = init } = {}) {
+// `homeDir` stands in for the user's home, so the real ~/.claude/settings.json is never read.
+async function install(projectDir, { answer = false, optional = 'none', pullRequest, statusLine, homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-')), initFrom = init } = {}) {
   const tools = fakeTools(projectDir);
   const io = quietIO(answer);
   await initFrom({
@@ -73,6 +74,8 @@ async function install(projectDir, { answer = false, optional = 'none', pullRequ
     language: 'Spanish',
     checkCommand: 'npm test',
     pullRequest,
+    statusLine,
+    homeDir,
     optional,
   });
   return { ...tools, io };
@@ -129,7 +132,8 @@ describe('installer in a new project', () => {
     const { io, commands } = await install(dir);
     const after = ['AGENTS.md', 'CLAUDE.md', '.claude/settings.json', '.claude/settings.local.json', '.gitignore', 'openspec/config.yaml'].map((f) => read(dir, f));
     assert.deepEqual(after, before);
-    assert.deepEqual(io.questions.filter((q) => !q.startsWith('Reinstall')), []);
+    // The declined status line is offered again (see "installer status line").
+    assert.deepEqual(io.questions.filter((q) => !q.startsWith('Reinstall') && !q.startsWith('Show where the change stands')), []);
     assert.ok(!commands.some((c) => c.includes('skills@latest add')), 'nothing to reinstall');
   });
 });
@@ -181,7 +185,11 @@ describe('installer in an existing project', () => {
     assert.equal(commands.filter((c) => c.includes('agent-workflow')).length, KIT_HOOKS.flatMap((g) => g.hooks).length);
     assert.match(read(dir, 'docs/agents/issue-tracker.md'), /Issue tracker: OpenSpec/);
     assert.ok(!existsSync(path.join(dir, '.claude', 'commands', 'opsx')));
-    assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')), { language: 'spanish', permissions: { allow: ['Bash(ls)'] } });
+    assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')), {
+      language: 'spanish',
+      permissions: { allow: ['Bash(ls)'] },
+      statusLine: { type: 'command', command: `${STATUS_COMMAND} --statusline` },
+    });
   });
 
   it('adds hooks missing from a matcher group even when another group has the same script', async () => {
@@ -244,6 +252,49 @@ describe('installer status command', () => {
     assert.ok(printed.includes(`alias workflow-status='${STATUS_COMMAND}'`), printed);
     assert.ok(printed.includes(`function workflow-status { ${STATUS_COMMAND} @args }`), printed);
     assert.ok(!existsSync(path.join(dir, 'package.json')));
+  });
+});
+
+describe('installer status line', () => {
+  const STATUS_LINE = { type: 'command', command: `${STATUS_COMMAND} --statusline` };
+  const offered = (io) => io.questions.some((q) => q.startsWith('Show where the change stands in Claude Code\'s status line?'));
+
+  it('writes the status line to the local settings, keeping the language', async () => {
+    const dir = newProject();
+    const { io } = await install(dir, { answer: true });
+    assert.ok(offered(io));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')), { language: 'spanish', statusLine: STATUS_LINE });
+    assert.equal(JSON.parse(read(dir, '.claude/settings.json')).statusLine, undefined, 'not imposed on the team');
+  });
+
+  for (const [where, file] of [['the user\'s settings', 'home'], ['the project\'s settings', '.claude/settings.json'], ['the local settings', '.claude/settings.local.json']]) {
+    it(`is not offered when ${where} already have a status line`, async () => {
+      const dir = newProject();
+      const homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-'));
+      const target = file === 'home' ? path.join(homeDir, '.claude', 'settings.json') : path.join(dir, file);
+      const mine = { type: 'command', command: 'my-statusline.sh' };
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, JSON.stringify({ statusLine: mine }));
+      const { io } = await install(dir, { answer: true, homeDir });
+      assert.ok(!offered(io));
+      assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')).statusLine, file === '.claude/settings.local.json' ? mine : undefined);
+    });
+  }
+
+  it('is skipped with --yes', async () => {
+    const dir = newProject();
+    const { io } = await install(dir, { answer: true, statusLine: false });
+    assert.ok(!offered(io));
+    assert.equal(JSON.parse(read(dir, '.claude/settings.local.json')).statusLine, undefined);
+  });
+
+  it('is offered again on a later run until there is one', async () => {
+    const dir = newProject();
+    await install(dir, { answer: false });
+    assert.equal(JSON.parse(read(dir, '.claude/settings.local.json')).statusLine, undefined, 'declined');
+    assert.ok(offered((await install(dir, { answer: true })).io));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/settings.local.json')).statusLine, STATUS_LINE);
+    assert.ok(!offered((await install(dir, { answer: true })).io));
   });
 });
 
