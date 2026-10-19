@@ -5,6 +5,7 @@
 //   node .claude/hooks/agent-workflow/status.mjs                the roadmap of each change
 //   node .claude/hooks/agent-workflow/status.mjs --json         the snapshot as JSON
 //   node .claude/hooks/agent-workflow/status.mjs --statusline   one line for Claude Code's status line
+//   node .claude/hooks/agent-workflow/status.mjs --report       the text to paste into a team tracker
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,6 +84,40 @@ export function changeProgress(name, tasksMd) {
 }
 
 // ---------------------------------------------------------------------------
+// External references
+
+// One YAML scalar: double-quoted, single-quoted, or plain up to a ` #` comment.
+// A plain `#42` is a comment in YAML, so it reads as nothing.
+function yamlScalar(text) {
+  const double = text.match(/^\s*"((?:[^"\\]|\\.)*)"/);
+  if (double) return double[1].replace(/\\(.)/g, '$1');
+  const single = text.match(/^\s*'((?:[^']|'')*)'/);
+  if (single) return single[1].replace(/''/g, "'");
+  return text.replace(/(?:^|\s)#.*$/, '').trim();
+}
+
+// The external references of a change: the top-level list `x-external-references`
+// of its .openspec.yaml (ADR 0009). OpenSpec's JSON leaves `x-` keys out, so the
+// module reads the file itself. The adapter writes a block list; a flow list
+// written by hand reads too.
+export function parseExternalReferences(yaml) {
+  const references = [];
+  let inList = false;
+  for (const line of (yaml ?? '').replace(/\r\n/g, '\n').split('\n')) {
+    const key = line.match(/^([A-Za-z_][\w-]*):(?:\s+(.*))?$/);
+    if (key) {
+      inList = key[1] === 'x-external-references';
+      const flow = inList && key[2]?.match(/^\[(.*)\]/);
+      if (flow) references.push(...(flow[1].match(/\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*')|[^,]+/g) ?? []).map(yamlScalar));
+      continue;
+    }
+    const item = inList && line.match(/^\s*-(?:\s+(.*))?$/);
+    if (item) references.push(yamlScalar(item[1] ?? ''));
+  }
+  return references.filter(Boolean);
+}
+
+// ---------------------------------------------------------------------------
 // The project
 
 const INSTALL_COMMAND = 'npx github:samfaina/agent-workflow init';
@@ -138,7 +173,14 @@ export function readStatus(projectDir) {
   const branch = currentBranch(projectDir);
   const installed = existsSync(path.join(projectDir, 'openspec')) && existsSync(path.join(projectDir, '.claude', 'agent-workflow.json'));
   const changes = activeChanges(projectDir)
-    .map((name) => ({ ...changeProgress(name, readIfExists(path.join(projectDir, 'openspec', 'changes', name, 'tasks.md'))), current: branch === `change/${name}` }))
+    .map((name) => {
+      const dir = path.join(projectDir, 'openspec', 'changes', name);
+      return {
+        ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
+        references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
+        current: branch === `change/${name}`,
+      };
+    })
     // The change in hand comes first; the sort is stable, so the rest keep name order.
     .sort((a, b) => b.current - a.current);
   const dirty = dirtyPaths(projectDir);
@@ -164,7 +206,11 @@ const MARKS = { done: '✓', frontier: '→', ready: '·', blocked: '·' };
 
 // The roadmap of one change: its tickets, the frontier ticket with its command.
 function changeRoadmap(change, marked) {
-  const head = change.stage === 'no-tickets' ? `${change.name} · no tickets yet` : `${change.name} · ${change.ticketsDone} of ${change.ticketsTotal} tickets done`;
+  const head = [
+    change.name,
+    change.stage === 'no-tickets' ? 'no tickets yet' : `${change.ticketsDone} of ${change.ticketsTotal} tickets done`,
+    ...(change.references.length ? [change.references.join(', ')] : []),
+  ].join(' · ');
   const lines = [marked ? `${head} (current branch)` : head];
   const labels = change.tickets.map((t) => `${t.number}. ${t.title}`);
   const width = Math.max(0, ...labels.map((l) => l.length)) + 2;
@@ -190,6 +236,27 @@ export function formatRoadmap(status) {
   }
   if (status.state === 'nothing-in-flight') blocks.push(`No change in flight. Next: ${status.next}`);
   return blocks.join('\n\n');
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot to paste
+
+const STAGE_LABELS = {
+  'no-tickets': 'spec published, no tickets yet',
+  'tickets-open': 'tickets open',
+  finished: 'every ticket done, ready to close',
+};
+
+// The progress snapshot of one change as text to paste into a team tracker
+// (ADR 0008): its name, stage, tickets done and external references. Nothing
+// from the spec or the tickets leaves the repository.
+export function formatSnapshot(change) {
+  return [
+    `Change: ${change.name}`,
+    `Stage: ${STAGE_LABELS[change.stage]}`,
+    `Tickets done: ${change.ticketsDone} of ${change.ticketsTotal}`,
+    ...(change.references.length ? [`Work items: ${change.references.join(', ')}`] : []),
+  ].join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -223,10 +290,22 @@ function readSessionData() {
 // ---------------------------------------------------------------------------
 // Command
 
-const USAGE = 'Usage: node .claude/hooks/agent-workflow/status.mjs [--json | --statusline]';
+const USAGE = 'Usage: node .claude/hooks/agent-workflow/status.mjs [--json | --statusline | --report [<change>]]';
+
+// The snapshot of the change named, else of the current branch's change, else of every active change.
+function snapshotToPaste(status, name) {
+  if (status.state === 'not-installed') return formatRoadmap(status);
+  const changes = name ? status.changes.filter((c) => c.name === name)
+    : status.changes.some((c) => c.current) ? status.changes.filter((c) => c.current)
+    : status.changes;
+  if (name && !changes.length) return null;
+  return changes.length ? changes.map(formatSnapshot).join('\n\n') : 'No change in flight.';
+}
 
 function main(args) {
-  if (args.length > 1 || args.some((a) => a !== '--json' && a !== '--statusline')) {
+  const valid = args[0] === '--report' ? args.length <= 2 && !args[1]?.startsWith('-')
+    : args.length <= 1 && args.every((a) => a === '--json' || a === '--statusline');
+  if (!valid) {
     process.stderr.write(`${USAGE}\n`);
     process.exitCode = 1;
     return;
@@ -241,6 +320,16 @@ function main(args) {
     return;
   }
   const status = readStatus(findProjectDir());
+  if (args[0] === '--report') {
+    const text = snapshotToPaste(status, args[1]);
+    if (text === null) {
+      process.stderr.write(`No active change named ${args[1]}.\n`);
+      process.exitCode = 1;
+    } else {
+      process.stdout.write(`${text}\n`);
+    }
+    return;
+  }
   process.stdout.write(`${args[0] === '--json' ? JSON.stringify(status, null, 2) : formatRoadmap(status)}\n`);
 }
 

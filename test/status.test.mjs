@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatRoadmap, readStatus } from '../hooks/status.mjs';
+import { formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
 
 const STATUS = fileURLToPath(new URL('../hooks/status.mjs', import.meta.url));
 
@@ -55,7 +55,7 @@ function write(dir, file, content) {
 }
 
 // A git repository with the kit installed and one commit on main.
-function installedProject({ changes = {} } = {}) {
+function installedProject({ changes = {}, metadata = {} } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'aw-status-'));
   git(dir, 'init', '--quiet', '--initial-branch=main');
   git(dir, 'config', 'user.email', 'test@example.com');
@@ -66,6 +66,7 @@ function installedProject({ changes = {} } = {}) {
     write(dir, `openspec/changes/${change}/proposal.md`, `# ${change}\n`);
     if (tasks !== null) write(dir, `openspec/changes/${change}/tasks.md`, tasks);
   }
+  for (const [change, yaml] of Object.entries(metadata)) write(dir, `openspec/changes/${change}/.openspec.yaml`, yaml);
   git(dir, 'add', '-A');
   git(dir, 'commit', '--quiet', '-m', 'chore: set up');
   return dir;
@@ -127,6 +128,34 @@ describe('status of one change', () => {
     assert.equal(status.changes[0].frontier, null);
     assert.deepEqual([status.changes[0].ticketsDone, status.changes[0].ticketsTotal], [4, 4]);
     assert.equal(status.next, '/close-change add-greeting');
+  });
+});
+
+describe('external references', () => {
+  it('reads the references of each change from its .openspec.yaml, none when the key or the file is missing', () => {
+    const status = readStatus(installedProject({
+      changes: { 'add-export': null, 'add-greeting': GREETING, 'fix-login': null },
+      metadata: {
+        'add-greeting': 'schema: spec-driven\ncreated: 2026-10-19\nx-external-references:\n  - PROJ-123\n  - "#42"\n  - \'AB#987\'  # the Azure Boards item\n  - https://linear.app/acme/issue/ENG-7\n',
+        'fix-login': 'schema: spec-driven\ncreated: 2026-10-19\n',
+      },
+    }));
+    assert.deepEqual(status.changes.map((c) => [c.name, c.references]), [
+      ['add-export', []],
+      ['add-greeting', ['PROJ-123', '#42', 'AB#987', 'https://linear.app/acme/issue/ENG-7']],
+      ['fix-login', []],
+    ]);
+  });
+
+  it('reads a flow list and stops at the next top-level key', () => {
+    const status = readStatus(installedProject({
+      changes: { 'add-flow': null, 'add-block': null },
+      metadata: {
+        'add-flow': 'x-external-references: [PROJ-1, "#42", "a, b"]\nschema: spec-driven\n',
+        'add-block': 'x-external-references:\n- ENG-7\n\nschema: spec-driven\nx-other:\n  - nope\n',
+      },
+    }));
+    assert.deepEqual(status.changes.map((c) => [c.name, c.references]), [['add-block', ['ENG-7']], ['add-flow', ['PROJ-1', '#42', 'a, b']]]);
   });
 });
 
@@ -258,6 +287,25 @@ describe('counts against OpenSpec', { skip: !openspecInstalled && 'openspec is n
   });
 });
 
+describe('external references in OpenSpec', { skip: !openspecInstalled && 'openspec is not installed' }, () => {
+  it('passes validate --strict and survives the archive', () => {
+    const dir = installedProject({
+      changes: { 'add-greeting': '## 1. Greet\n\nBlocked by: none\n\n- [x] 1.1 greets; verified by a test\n' },
+      metadata: { 'add-greeting': 'schema: spec-driven\ncreated: 2026-10-19\nx-external-references:\n  - PROJ-1\n  - "#42"\n' },
+    });
+    write(dir, 'openspec/changes/add-greeting/proposal.md', '## Why\n\nUsers starting the CLI should be greeted so they know it works.\n\n## What Changes\n\n- Print a greeting.\n\n## Capabilities\n\n### New Capabilities\n\n- `greeting`: greets the user.\n\n### Modified Capabilities\n\nNone.\n\n## Impact\n\nThe CLI.\n');
+    write(dir, 'openspec/changes/add-greeting/specs/greeting/spec.md', '## ADDED Requirements\n\n### Requirement: Greet the user\n\nThe CLI SHALL print a greeting when it starts.\n\n#### Scenario: Start the CLI\n\n- **WHEN** the user starts the CLI\n- **THEN** it prints "Hello"\n');
+    const openspec = (command) => spawnSync(`openspec ${command}`, { cwd: dir, shell: true, encoding: 'utf8' });
+    const validated = openspec('validate add-greeting --strict');
+    assert.equal(validated.status, 0, validated.stdout + validated.stderr);
+    const archived = openspec('archive add-greeting --yes');
+    assert.equal(archived.status, 0, archived.stdout + archived.stderr);
+    const [folder] = readdirSync(path.join(dir, 'openspec', 'changes', 'archive'));
+    const yaml = readFileSync(path.join(dir, 'openspec', 'changes', 'archive', folder, '.openspec.yaml'), 'utf8');
+    assert.deepEqual(parseExternalReferences(yaml), ['PROJ-1', '#42']);
+  });
+});
+
 describe('developer view', () => {
   it('prints the roadmap of a change, the frontier ticket with its command', () => {
     assert.equal(formatRoadmap(readStatus(installedProject({ changes: { 'add-greeting': GREETING } }))), [
@@ -280,6 +328,22 @@ describe('developer view', () => {
       'add-export · no tickets yet',
       '  next: /to-tickets add-export',
     ].join('\n'));
+  });
+
+  it('names the external references of a change in its header', () => {
+    const dir = installedProject({
+      changes: { 'add-export': null, 'add-greeting': GREETING },
+      metadata: {
+        'add-export': 'x-external-references:\n  - ENG-7\n',
+        'add-greeting': 'x-external-references:\n  - PROJ-123\n  - "#42"\n',
+      },
+    });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-export');
+    const headers = formatRoadmap(readStatus(dir)).split('\n').filter((line) => /^\S/.test(line));
+    assert.deepEqual(headers, [
+      'add-export · no tickets yet · ENG-7 (current branch)',
+      'add-greeting · 2 of 4 tickets done · PROJ-123, #42',
+    ]);
   });
 
   it('names stray files after the roadmaps', () => {
@@ -354,6 +418,41 @@ describe('status command', () => {
     git(archived, 'switch', '--quiet', '-c', 'change/add-greeting');
     write(archived, 'openspec/changes/archive/2026-10-01-add-greeting/tasks.md', GREETING);
     assert.equal(run(archived, '--statusline').stdout, '', 'an archived change');
+  });
+
+  it('prints the snapshot of the current change to paste into a tracker with --report, nothing from the spec', () => {
+    const dir = installedProject({
+      changes: { 'add-export': null, 'add-greeting': GREETING },
+      metadata: { 'add-greeting': 'x-external-references:\n  - PROJ-123\n  - "#42"\n' },
+    });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greeting');
+    const result = run(dir, '--report');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Change: add-greeting\nStage: tickets open\nTickets done: 2 of 4\nWork items: PROJ-123, #42\n');
+  });
+
+  it('prints every active change with --report off a change branch, or the one named', () => {
+    const dir = installedProject({ changes: { 'add-export': null, 'fix-login': GREETING.replace(/- \[ \]/g, '- [x]') } });
+    assert.equal(run(dir, '--report').stdout, [
+      'Change: add-export',
+      'Stage: spec published, no tickets yet',
+      'Tickets done: 0 of 0',
+      '',
+      'Change: fix-login',
+      'Stage: every ticket done, ready to close',
+      'Tickets done: 4 of 4',
+      '',
+    ].join('\n'));
+    assert.equal(run(dir, '--report', 'fix-login').stdout, 'Change: fix-login\nStage: every ticket done, ready to close\nTickets done: 4 of 4\n');
+    const missing = run(dir, '--report', 'add-nothing');
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /No active change named add-nothing/);
+  });
+
+  it('says so with --report when no change is in flight', () => {
+    const result = run(installedProject(), '--report');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'No change in flight.\n');
   });
 
   it('rejects an unknown option', () => {

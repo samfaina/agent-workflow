@@ -12,12 +12,14 @@ Planned work goes through one **change** at a time:
 
 Not sure what comes next? `/now-what`
 
+A change may start from a **work item** in the team tracker (Jira, Linear, GitHub Issues...). When the user gives its external reference (`PROJ-123`, `#42`, a URL), ask them to paste the work item's title and description, interview from that, and keep the reference: `/to-spec` writes it into the change. Never create work items.
+
 Specs and tickets live in OpenSpec (`openspec/`), reached only through the steps above. `docs/agents/issue-tracker.md` says how.
 
 ## Git
 
 - Each change lives on `change/<change>`. Protected branches (`protectedBranches` in `.claude/agent-workflow.json`) receive work only through a pull request, or a merge the user makes when the project has no remote. `/close-change` hands the branch over; it opens a pull request only when `pullRequest` in `.claude/agent-workflow.json` names a tool and the user says yes.
-- Commit messages follow Conventional Commits. Work on a ticket ends with the trailer `Refs: <change>#N`.
+- Commit messages follow Conventional Commits. Work on a ticket ends with the trailer `Refs: <change>#N`. A change linked to work items adds one `External-Ref: <reference>` trailer per work item to every commit, and no closing keyword (`Closes`, `Fixes`, `#close`).
 - The user pushes, unless `allowPush` is `true`.
 
 ## Quality gate

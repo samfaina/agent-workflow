@@ -184,6 +184,54 @@ It finishes by handing the branch over. It writes the pull request's title and b
 
 Review the pull request in your code host and merge it.
 
+### Link a change to your team tracker
+
+When your team plans its work in Jira, Linear, GitHub Issues, Azure Boards or any other tool, link the change to the **work items** it serves. Name each one by its **external reference**, written as your team writes it: `PROJ-123`, `#42`, `AB#987`, `ENG-7` or a URL.
+
+- **From the start**: give the reference to the interview, for example `/grill-with-docs PROJ-123`. Claude asks you to paste the work item's title and description, interviews you from there, and `/to-spec` writes the reference into the change.
+- **Later**: ask Claude to link `PROJ-123` to the change, or add it yourself to `openspec/changes/<change>/.openspec.yaml` and commit `docs(<change>): link PROJ-123`.
+
+```yaml
+x-external-references:
+  - "PROJ-123"
+  - "#42"
+```
+
+Quote every reference: in YAML an unquoted `#42` is a comment. A change can have several references, and several changes can share one. The kit never creates work items.
+
+From then on:
+
+- every commit of the change carries one `External-Ref: PROJ-123` trailer per reference, after `Refs: remove-todo#N`;
+- the roadmap names them in its header: `remove-todo · 2 of 4 tickets done · PROJ-123`;
+- `/close-change` ends the pull request title with ` (PROJ-123)` and adds a `Work items: PROJ-123` line to its body.
+
+It never writes `Closes`, `Fixes` or `#close`: when a work item is split across several changes, the first merge would close it. Closing it stays with your team.
+
+The kit needs no credentials: your tracker's own integration with your code host links the work once the branch is pushed. Each one looks in a different place:
+
+| Team tracker | Finds the reference in |
+| --- | --- |
+| Jira (with Bitbucket, GitHub or GitLab) | the commit messages and the pull request title |
+| GitHub Issues, GitLab issues | the commit messages and the pull request body, as a mention that closes nothing |
+| Azure Boards | `AB#987` in the commit messages and the pull request body |
+| Linear | the pull request title and body |
+| A tracker with no integration, or a spreadsheet | nothing: paste the snapshot below |
+
+For a tracker that nothing reaches, print the change's snapshot and paste it into the work item:
+
+```bash
+npm run workflow:status -- --report
+```
+
+```
+Change: remove-todo
+Stage: tickets open
+Tickets done: 2 of 4
+Work items: PROJ-123
+```
+
+On a change branch it prints that change; elsewhere, every change in flight, or the one you name with `--report remove-todo`. It holds only the name, the stage, the tickets done and the references: nothing from the spec or the tickets leaves the repository.
+
 ### Outside a change
 
 - **A bug**: describe it and say "diagnose this"; `diagnosing-bugs` builds a failing loop before guessing at causes. For a fix worth a spec, run the flow from `/grill-with-docs`.

@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Close one finished **change**: simplify its code, harden it, verify it against its spec, archive it so its delta specs merge into the living spec, and hand its branch over as a pull request or a local merge. `code-review` already ran on every ticket during `/implement`; this skill looks at the change as a whole instead.
 
-Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches and commit trailers.
+Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches, external references and commit trailers.
 
 ## Process
 
@@ -27,19 +27,21 @@ Every check below must hold. When one fails, report which and stop:
 
 An archived change passed the last two checks before its archive: when the first two hold, skip steps 2 to 7 and resume at step 8.
 
+Read the change's **external references**: the list `x-external-references` in `openspec/changes/<change>/.openspec.yaml`, or in `openspec/changes/archive/<date>-<change>/.openspec.yaml` for an archived change. A change may have none. Every commit this skill makes ends with the trailer `Refs: <change>` followed by one `External-Ref: <reference>` per reference, as **Commit trailers** in the adapter shows.
+
 ### 2. Pin the diff
 
 Find the base: the first branch of `protectedBranches` in `.claude/agent-workflow.json` that exists locally, then `git merge-base HEAD <that branch>`. The change's diff is `git diff <base>...HEAD`; its files are `git diff --name-only <base>...HEAD`. The **code files** are those outside `openspec/`, `docs/` and `.claude/`. With no code files, skip to step 5.
 
 ### 3. Simplify
 
-Call the Skill tool with `code-simplification`, scoped to the code files. Behaviour stays exactly as the specs describe it. Run `checkCommand` from `.claude/agent-workflow.json`; when it passes, commit `refactor(<change>): simplify` with the trailer `Refs: <change>`. When nothing is worth simplifying, say so and move on.
+Call the Skill tool with `code-simplification`, scoped to the code files. Behaviour stays exactly as the specs describe it. Run `checkCommand` from `.claude/agent-workflow.json`; when it passes, commit `refactor(<change>): simplify` with the trailers of step 1. When nothing is worth simplifying, say so and move on.
 
 ### 4. Harden
 
 Call the Skill tool with `security-and-hardening` to audit the code files, starting from the trust boundaries the change introduces or touches. For each finding, record its severity and the `file:line` it points at.
 
-- Fix every critical and high finding in the change's own code, run `checkCommand`, and commit `fix(<change>): <what was hardened>` with the trailer `Refs: <change>`.
+- Fix every critical and high finding in the change's own code, run `checkCommand`, and commit `fix(<change>): <what was hardened>` with the trailers of step 1.
 - When a fix would change behaviour the specs describe, ask the user before applying it.
 - Medium and low findings go to the report.
 
@@ -58,7 +60,7 @@ Grade each issue: **CRITICAL** (a missing requirement, a removed behaviour still
 
 ### 6. Archive
 
-Run `openspec archive <change> --yes`. Then run `openspec validate --specs --strict` to check the living spec. Commit `docs(<change>): archive change` with the trailer `Refs: <change>`.
+Run `openspec archive <change> --yes`. Then run `openspec validate --specs --strict` to check the living spec. Commit `docs(<change>): archive change` with the trailers of step 1.
 
 ### 7. Report
 
@@ -68,10 +70,12 @@ Summarise in a few lines: the simplification and hardening commits, the security
 
 Write the pull request for `change/<change>` into the base branch of step 2:
 
-- **Title**: one Conventional Commits line for the whole change, `<type>(<change>): <what it does>`, taken from `proposal.md`.
+- **Title**: one Conventional Commits line for the whole change, `<type>(<change>): <what it does>`, taken from `proposal.md`. When the change has external references, the title ends in ` (<references>)`, separated by commas: `feat(add-greeting): greet the user by name (PROJ-123, #42)`.
 - **Body**: when `.claude/skills/pr/SKILL.md` exists, call the Skill tool with `pr` to write it. Otherwise write a short body: what the change does and why (from `proposal.md`), the capabilities the living spec gained or changed, the verification table, and the security findings left open.
+- **Work items**: when the change has external references, the body has the line `Work items: <references>`, separated by commas, whether `pr` writes the body or you do.
+- **No closing keywords**: neither the title nor the body says `Closes`, `Fixes` or `#close`, even when `pr` writes them; remove them. A work item split across several changes would close at the first merge, and closing it is the team's call.
 
-When resuming an archived change, find the base branch as step 2 does. Read `proposal.md` from `openspec/changes/archive/<date>-<change>/`; the capabilities are the folder names under its `specs/`. The verification table and the security findings belong to the earlier run, so the body leaves them out, whether `pr` writes it or you do.
+When resuming an archived change, find the base branch as step 2 does. Read `proposal.md` and `.openspec.yaml` from `openspec/changes/archive/<date>-<change>/`; the capabilities are the folder names under its `specs/`. The verification table and the security findings belong to the earlier run, so the body leaves them out, whether `pr` writes it or you do.
 
 Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is `{ "via": "none" }`. Run `git remote`: the remote is `origin` when it is listed, otherwise the first one listed. Then follow the first case that applies:
 

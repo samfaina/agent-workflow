@@ -19,7 +19,7 @@ The stages run in this order every time. When the last one finishes, the change 
 | Interview | `/grill-with-docs <idea>` | new | new terms in `GLOSSARY.md`, decisions in `docs/adr/` |
 | Spec | `/to-spec <change>` | same as the interview | the branch `change/<change>`, with `proposal.md`, delta specs and `design.md` |
 | Tickets | `/to-tickets <change>` | new | `tasks.md` with numbered tickets |
-| Implement | `/implement <change>#N` | new, for every ticket | code and tests, ticked boxes, a commit with `Refs: <change>#N` |
+| Implement | `/implement <change>#N` | new, for every ticket | code and tests, ticked boxes, a commit with `Refs: <change>#N` (plus `External-Ref:` for each work item) |
 | Close | `/close-change <change>` | new | simplification and security fixes, the archived change, an updated living spec |
 
 ### Interview
@@ -53,6 +53,7 @@ openspec/
 ├── config.yaml                rules the kit adds to every artifact
 ├── changes/
 │   ├── remove-todo/           a change in progress
+│   │   ├── .openspec.yaml     metadata, including the external references
 │   │   ├── proposal.md        why, what, and what is out of scope
 │   │   ├── specs/             delta specs, one folder per capability
 │   │   ├── design.md          decisions and test seams
@@ -66,6 +67,18 @@ docs/adr/                      decisions that are hard to reverse
 A change lives in `openspec/changes/<change>/` while you work on it. Archiving moves the folder to `openspec/changes/archive/` and merges its delta specs into `openspec/specs/`. Only `/close-change` does that: the living spec is a **protected path**, so Claude cannot edit it by hand.
 
 To see where a change stands, run `npm run workflow:status`, or `node .claude/hooks/agent-workflow/status.mjs` in a project without `package.json`. It prints the change's **roadmap**: which tickets are done, which is the frontier ticket with the command that builds it, and which wait on a blocker. `/to-tickets` and every `/implement` end with the same roadmap, printed by the same module, so the next step never depends on what Claude remembers.
+
+## Your team tracker
+
+Your team may plan its work somewhere else: Jira, Linear, GitHub Issues, Azure Boards, a spreadsheet. The kit leaves that **team tracker** to your team. Specs and tickets stay in OpenSpec, and the kit never reads a **work item**'s state or creates one.
+
+A change records the work items it serves as **external references** (`PROJ-123`, `#42`, `AB#987`, a URL), in the list `x-external-references` of its `.openspec.yaml`. OpenSpec validates and archives that file as it is. From there the references travel where trackers look for them:
+
+- every commit of the change ends with one `External-Ref: <reference>` trailer per reference, next to `Refs: <change>#N`;
+- the pull request title ends in ` (<references>)`, and its body has a `Work items: <references>` line;
+- the roadmap names them in each change's header.
+
+Your tracker's integration with your code host does the linking, so the kit needs no credentials: Jira reads the commits and the pull request title; GitHub, GitLab and Azure Boards read the commits and the pull request body; Linear reads the pull request. The kit never writes a closing keyword such as `Closes #42`, because a work item split across several changes would close at the first merge. For a tracker that nothing reaches, `status.mjs --report` prints the change's snapshot (its name, stage, tickets done and references) ready to paste. [The guide](./guide.md#link-a-change-to-your-team-tracker) shows how to link a change.
 
 ## Why a fresh session per stage
 
@@ -117,6 +130,9 @@ Claude cannot loosen them: their configuration file is itself protected, so chan
 | **Seam** | A place in the code where a test can observe behaviour, agreed during `/to-spec`. |
 | **Archive** | Retiring a finished change and merging its delta specs into the living spec. |
 | **Adapter** | The document that tells Matt's skills to read and write OpenSpec as if it were their issue tracker. |
+| **Team tracker** | The tool where your team plans its work outside the repository, such as Jira, Linear or GitHub Issues. |
+| **Work item** | One unit of work in the team tracker, whatever it calls it: story, issue, card or row. |
+| **External reference** | The identifier of a work item as your team writes it, such as `PROJ-123` or `#42`, linked to a change. |
 | **Quality gate** | Your project's check command, which must pass before Claude may commit. |
 | **Protected path** | A file or folder Claude may never edit directly. |
 
