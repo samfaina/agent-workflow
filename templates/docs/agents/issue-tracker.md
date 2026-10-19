@@ -14,6 +14,7 @@ blocking link, blocked by | the ticket's `Blocked by:` line
 close the ticket, mark it done | tick every checkbox of the ticket
 comment on the ticket | a `- Note:` bullet under the ticket's checkboxes
 triage label (`ready-for-agent`, `needs-triage`...) | nothing: this tracker has no labels, so skip every label step
+external reference (`PROJ-123`, `#42`, `AB#987`, `ENG-7`, a URL) | the identifier of a **work item** in the **team tracker** (Jira, Linear, GitHub Issues, a spreadsheet...). It is not a ticket reference, and that tracker is not this one: specs and tickets still live in OpenSpec. See **External references**
 
 ## Branch
 
@@ -25,12 +26,43 @@ Every change lives on its own branch, `change/<change>`, created from a protecte
 
 Pushing is the user's job, unless `allowPush` is `true`. Only `/close-change` opens a pull request, with the tool named in `pullRequest` and after the user says yes.
 
+## External references
+
+A change can be linked to the work items it serves in the team tracker. Their **external references** live in one place only, the top-level list `x-external-references` of `openspec/changes/<change>/.openspec.yaml`:
+
+```yaml
+schema: spec-driven
+created: 2026-10-19
+x-external-references:
+  - "PROJ-123"
+  - "#42"
+```
+
+- Write each reference exactly as the user gave it, in double quotes: an unquoted `#42` is a YAML comment. Keep the `x-` prefix: `openspec validate --strict` rejects any other unknown key.
+- A change has zero or more references, and several changes may share one. A change without any leaves the key out.
+- They travel in every commit of the change (see **Commit trailers**) and in its pull request, so the team tracker can link the work through its own integration with the code host.
+- Never create a work item, and never write a closing keyword (`Closes`, `Fixes`, `#close`) in a commit or a pull request: a work item split across several changes would close at the first merge.
+- **Linking later**: get onto the change branch, add the reference to the list, and commit `docs(<change>): link <reference>` with its trailers.
+- `node .claude/hooks/agent-workflow/status.mjs --json` lists them under each change's `references`.
+
+## Commit trailers
+
+Every commit this document defines ends with its trailers, in one block on the last lines of the message: first the `Refs:` trailer when the step names one, then one `External-Ref: <reference>` per external reference of the change, in the order of the list. With no external references, there are no `External-Ref:` lines.
+
+```
+feat(add-greeting): greet the user by name
+
+Refs: add-greeting#2
+External-Ref: PROJ-123
+External-Ref: #42
+```
+
 ## When a skill says "publish to the issue tracker" (a spec)
 
 Used by `/to-spec`.
 
 1. Pick the change name: kebab-case, starting with a verb (`add-greeting`, `fix-login-timeout`). If `openspec list` already shows that name, ask the user for another one.
-2. Get onto the change branch (see **Branch**), then run `openspec new change <change>`.
+2. Get onto the change branch (see **Branch**), then run `openspec new change <change>`. When the interview named external references, write them into the change's `.openspec.yaml` (see **External references**). When it named none, do not ask for any.
 3. For each artifact in this order, `proposal`, `specs`, `design`: run `openspec instructions <artifact> --change <change>`, read the files it lists, and write the file at its output path following its instruction, template, `<project_context>` and `<rules>`. Always write `design.md`, even for a small change.
 4. Map the spec template sections onto the artifacts:
 
@@ -50,7 +82,7 @@ Used by `/to-spec`.
    - Each requirement has one success scenario plus one scenario for every error or edge case the stories mention, each `#### Scenario: <name>` with **WHEN** and **THEN** bullets.
    - Every user story is covered by at least one requirement. Several stories may share one requirement.
 5. Run `openspec validate <change> --strict` and fix every error and warning until it prints that the change is valid.
-6. Commit the change folder: `docs(<change>): publish spec`.
+6. Commit the change folder: `docs(<change>): publish spec`, with its trailers (see **Commit trailers**).
 7. Tell the user the change name and that the next step is `/to-tickets <change>`.
 
 ## When a skill says "publish the tickets"
@@ -61,7 +93,7 @@ Used by `/to-tickets`, after the user approves the breakdown.
 2. Run `openspec instructions tasks --change <change>`, read the files it lists, and write `tasks.md` at its output path. Write one group per approved ticket, in the **Ticket format** below, numbered from 1 in dependency order (blockers first, prefactoring first). Its last group is always the **manual test ticket**.
 3. Leave `proposal.md`, the specs and `design.md` as they are: publishing tickets never edits the spec.
 4. Run `openspec validate <change> --strict` until it passes, then `openspec list` and check that the change shows the expected number of tasks.
-5. Commit: `docs(<change>): publish tickets`.
+5. Commit: `docs(<change>): publish tickets`, with its trailers (see **Commit trailers**).
 6. Run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block: the roadmap of the change, with the command for its first ticket. Never write the roadmap yourself. Then tell the user to build each ticket with `/implement <change>#N`, each in a fresh session, and that `/implement <change>` without a number takes the frontier ticket.
 
 ## Ticket format
@@ -99,7 +131,7 @@ If the ticket is the manual test ticket:
 1. Before listing the steps, check each expected result against the spec and against the state the steps before it leave. When one cannot happen, say so, add a `- Note:` to the ticket with the result that should happen, and use that one.
 2. List the steps with their expected results, then give them as one block the user pastes into their shell (PowerShell on Windows, bash elsewhere). The block starts from a fresh setup, runs every step in order, and prints each command, its output and its exit code, plus whatever a step asks the user to look at, such as a doc. End the message with a direct question asking for the block's output. Do not offer a list of steps to tick.
 3. Compare the output with each expected result. Tick only the boxes whose result matches; for the others, add a `- Note:` with what was seen.
-4. The ticket changes only `tasks.md`: skip tdd and code-review, which the build tickets and `/close-change` already cover, and commit the ticked boxes.
+4. The ticket changes only `tasks.md`: skip tdd and code-review, which the build tickets and `/close-change` already cover, and commit the ticked boxes with the trailers of **Commit trailers**, `Refs: <change>#N` first.
 
 ## While working on a ticket
 
@@ -107,7 +139,7 @@ Used by `/implement`.
 
 - Work on the change branch (see **Branch**).
 - Tick a box (`- [x] N.M`) as soon as its criterion is met and verified. The ticket is done when all its boxes are ticked.
-- Commit with a Conventional Commits message and the trailer `Refs: <change>#N` on its last line, with the ticked `tasks.md` in the same commit as the code.
+- Commit with a Conventional Commits message and the trailers of **Commit trailers**: `Refs: <change>#N`, then the `External-Ref:` lines. The ticked `tasks.md` goes in the same commit as the code.
 - When the work shows the spec is wrong or incomplete, leave the spec as it is: add a `- Note:` bullet to the ticket and tell the user.
 - In the final message of a build ticket, show the code-review reports under the headings `## Standards` and `## Spec`, written exactly so in every conversation language, as their own sections and not folded into the ticket summary.
 - End the final message with the roadmap: after the commit, run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block. It names the next command, `/implement <change>#N` for the next frontier ticket or `/close-change <change>` when every box of every ticket is ticked. Never write the roadmap yourself.

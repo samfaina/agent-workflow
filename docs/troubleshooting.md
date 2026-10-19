@@ -74,6 +74,21 @@ A stage stops, or picks the wrong ticket.
 
 Read the message: the usual causes are a scenario written with three `#` instead of four, a requirement without a scenario, a requirement longer than 500 characters, or a missing `## Purpose` in a new capability. Ask Claude to fix it following `openspec instructions specs --change <change>`.
 
+### `openspec validate --strict` fails on an unrecognized key in `.openspec.yaml`
+
+OpenSpec accepts extra keys only with the `x-` prefix; any other unknown key fails the strict validation. The external references go under `x-external-references`, not `external-references` or `references`.
+
+### My team tracker does not show the change
+
+Your tracker's integration with your code host does the linking, not the kit. Check, in order:
+
+- the reference in `.openspec.yaml` is written exactly as the tracker shows it, case included, and in quotes: an unquoted `#42` is a YAML comment, so the change has no reference. `npm run workflow:status` names the references in each change's header;
+- the commits carry the trailer: `git log --format=%B change/<change>` shows `External-Ref:` lines. Commits made before you linked the work item have none, but the pull request title and body still name it;
+- the branch is pushed: an integration sees only what reaches the code host;
+- the integration is set up between your tracker and your code host, and looks where the kit writes the reference: [the guide](./guide.md#link-a-change-to-your-team-tracker) lists where each tracker looks.
+
+With no integration, paste the output of `npm run workflow:status -- --report` into the work item.
+
 ### `/implement` picks the wrong ticket
 
 Name it: `/implement <change>#N`. Check the `Blocked by:` lines in `tasks.md`: a ticket starts only when every box of its blockers is ticked.
