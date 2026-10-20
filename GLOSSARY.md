@@ -23,12 +23,16 @@ _Avoid_: bridge, shim, integration
 ## Changes and tickets
 
 **Workflow**:
-The fixed sequence of stages a change goes through: interview, spec, tickets, implementation (one ticket per session) and close.
+The fixed sequence of stages a change goes through: interview, spec, tickets, implementation (one ticket per session) and close; a light change replaces the first three with a single opening.
 _Avoid_: pipeline, process, flow
 
 **Change**:
-One unit of planned work, from spec to archive, stored as a folder of OpenSpec artifacts and named in kebab-case.
+One unit of planned work, from planning to archive, stored as a folder of OpenSpec artifacts and named in kebab-case.
 _Avoid_: feature, proposal, epic, PRD
+
+**Light change**:
+A change with no delta specs and a single ticket, for work that leaves the living spec untouched.
+_Avoid_: hotfix, chore, quick fix, patch, small change
 
 **User story**:
 A need described from a user's point of view, the usual starting point of a change; the spec turns each one into requirements.
@@ -111,7 +115,7 @@ _Avoid_: sync, mirroring
 ## Skills
 
 **Workflow skill**:
-A skill that moves a change from one stage to the next; only Matt's skills and the kit's `close-change` play this role.
+A skill that moves a change from one stage to the next; only Matt's skills and the kit's `light-change` and `close-change` play this role.
 _Avoid_: driver, orchestrator
 
 **Guide skill**:

@@ -18,4 +18,4 @@ Teams plan and follow their work in a team tracker the kit cannot know: Jira, Li
 - Choosing a `tracker` other than `none` in the installer is the authorization. Each post is shown, not asked. `allowPush` does not apply, because nothing is pushed.
 - `tracker` is `{ "via": "none" }` (the default, and what a missing setting means), `{ "via": "mcp", "server": "<name>" }`, or `{ "via": "cli", "command": "..." }` with `{ref}`, `{change}`, `{stage}`, `{done}`, `{total}`, `{url}`, `{message}` and `{messageFile}`, run once per reference.
 - The installer recognises no tracker, not even GitHub Issues. It asks one question that shows a generic example of the command's syntax, lists the MCP servers in `.mcp.json` as hints, and shows a sample snapshot before accepting anything other than `none`.
-- Work too small for a spec stays outside the workflow; its developer writes the external reference into the commit or pull request by hand.
+- Work too small for a spec is a light change (ADR 0011) and carries its external references like any other change.
