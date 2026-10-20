@@ -306,6 +306,27 @@ describe('external references in OpenSpec', { skip: !openspecInstalled && 'opens
   });
 });
 
+describe('light change in OpenSpec', { skip: !openspecInstalled && 'openspec is not installed' }, () => {
+  it('passes validate --strict with no delta specs and archives without touching the living spec', () => {
+    const living = '# greeting Specification\n\n## Purpose\n\nGreets the user.\n\n## Requirements\n\n### Requirement: Greet the user\n\nThe CLI SHALL print a greeting when it starts.\n\n#### Scenario: Start the CLI\n\n- **WHEN** the user starts the CLI\n- **THEN** it prints "Hello"\n';
+    const dir = installedProject({
+      changes: { 'fix-typo': '## 1. Fix the typo in the help\n\nBlocked by: none\n\nWhat to build: the help names the command correctly.\n\n- [x] 1.1 The help says "greet"; verified by a CLI test\n' },
+      metadata: { 'fix-typo': 'schema: spec-driven\ncreated: 2026-10-20\nskip_specs: true\nx-external-references:\n  - "#42"\n' },
+    });
+    write(dir, 'openspec/changes/fix-typo/proposal.md', '## Why\n\nThe help misspells the command, so users type the wrong one.\n\n## What Changes\n\n- Spell the command correctly in the help.\n');
+    write(dir, 'openspec/specs/greeting/spec.md', living);
+    const openspec = (command) => spawnSync(`openspec ${command}`, { cwd: dir, shell: true, encoding: 'utf8' });
+    const validated = openspec('validate fix-typo --strict');
+    assert.equal(validated.status, 0, validated.stdout + validated.stderr);
+    const archived = openspec('archive fix-typo --yes');
+    assert.equal(archived.status, 0, archived.stdout + archived.stderr);
+    assert.equal(readFileSync(path.join(dir, 'openspec', 'specs', 'greeting', 'spec.md'), 'utf8'), living);
+    assert.deepEqual(readdirSync(path.join(dir, 'openspec', 'specs')), ['greeting']);
+    const [folder] = readdirSync(path.join(dir, 'openspec', 'changes', 'archive'));
+    assert.match(folder, /^\d{4}-\d{2}-\d{2}-fix-typo$/);
+  });
+});
+
 describe('developer view', () => {
   it('prints the roadmap of a change, the frontier ticket with its command', () => {
     assert.equal(formatRoadmap(readStatus(installedProject({ changes: { 'add-greeting': GREETING } }))), [
@@ -343,6 +364,20 @@ describe('developer view', () => {
     assert.deepEqual(headers, [
       'add-export · no tickets yet · ENG-7 (current branch)',
       'add-greeting · 2 of 4 tickets done · PROJ-123, #42',
+    ]);
+  });
+
+  it('marks a light change in its header', () => {
+    const dir = installedProject({
+      changes: { 'add-greeting': GREETING, 'fix-typo': '## 1. Fix the typo\n\nBlocked by: none\n\n- [ ] 1.1 the help says "greet"; verified by a CLI test\n' },
+      metadata: { 'fix-typo': 'schema: spec-driven\ncreated: 2026-10-20\nskip_specs: true\nx-external-references:\n  - "#42"\n' },
+    });
+    const status = readStatus(dir);
+    assert.deepEqual(status.changes.map((c) => [c.name, c.light]), [['add-greeting', false], ['fix-typo', true]]);
+    const headers = formatRoadmap(status).split('\n').filter((line) => /^\S/.test(line));
+    assert.deepEqual(headers, [
+      'add-greeting · 2 of 4 tickets done',
+      'fix-typo (light) · 0 of 1 tickets done · #42',
     ]);
   });
 
@@ -449,6 +484,14 @@ describe('status command', () => {
     assert.match(missing.stderr, /No active change named add-nothing/);
   });
 
+  it('marks a light change in the snapshot of --report', () => {
+    const dir = installedProject({
+      changes: { 'fix-typo': '## 1. Fix the typo\n\nBlocked by: none\n\n- [x] 1.1 the help says "greet"; verified by a CLI test\n' },
+      metadata: { 'fix-typo': 'schema: spec-driven\nskip_specs: true\n' },
+    });
+    assert.equal(run(dir, '--report').stdout, 'Change: fix-typo (light)\nStage: every ticket done, ready to close\nTickets done: 1 of 1\n');
+  });
+
   it('says so with --report when no change is in flight', () => {
     const result = run(installedProject(), '--report');
     assert.equal(result.status, 0, result.stderr);
@@ -545,6 +588,15 @@ describe('projection', () => {
     ].join('\n'));
     assert.match(run(dir, '--project', 'spec-published', 'add-greeting').stdout, /^Could not post to PROJ-123/, 'a missed snapshot is not recorded');
   });
+
+  it('marks a light change in the text to paste when a post fails', () => {
+    const { dir } = trackerProject({ changes: { 'add-greeting': TWO_TICKETS(0).split('## 2.')[0] }, fail: true });
+    write(dir, 'openspec/changes/add-greeting/.openspec.yaml', `schema: spec-driven\nskip_specs: true\n${REFERENCES['add-greeting']}`);
+    const result = run(dir, '--project', 'tickets-published', 'add-greeting');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\nChange: add-greeting \(light\)\nStage: tickets open\nTickets done: 0 of 1\n/);
+  });
+
   it('asks the agent to post through the MCP server and records each post it reports', () => {
     const dir = installedProject({ changes: { 'add-greeting': null }, metadata: REFERENCES, config: { tracker: { via: 'mcp', server: 'jira' } } });
     const plan = run(dir, '--project', 'spec-published', 'add-greeting');

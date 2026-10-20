@@ -75,11 +75,11 @@ The name of a change, optionally followed by a ticket number, that identifies th
 _Avoid_: issue number, ticket ID
 
 **Manual test**:
-The last ticket of every change, in which a human exercises the finished behaviour by hand.
+The last ticket of every change but a light one, in which a human exercises the finished behaviour by hand.
 _Avoid_: QA ticket, smoke test
 
 **Verification**:
-Checking a finished change against its tickets, requirements, scenarios and design before it is archived.
+Checking a finished change against its tickets, requirements, scenarios and design before it is archived; a light change, against its ticket and the living spec's scenarios.
 _Avoid_: validation, review
 
 **Archive**:

@@ -15,6 +15,7 @@ It is **read-only**. Read files and run only commands that report state (`node .
 Before any command, note what this conversation already holds:
 
 - **Grilling**: `/grill-with-docs` or `grilling` ran here, and no `/to-spec` ran after it.
+- **Light work**: the user described work too small for a spec, such as a bug fix, a one-line change or a chore (see state 9).
 - **Situation**: the user described something off the workflow, such as a bug, a design question or a long session (see **Map off the workflow**).
 - **Earlier work**: anything that happened before `/now-what`.
 
@@ -23,7 +24,7 @@ Before any command, note what this conversation already holds:
 Run `node .claude/hooks/agent-workflow/status.mjs --json`. It prints the **progress snapshot** of the project, computed from git and the change files:
 
 - `state`: the first state of step 3 that the repository alone decides, and `next`, its command (`null` when the next step is not a command);
-- `changes`: each active change with its `stage`, its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, and `current` when `change/<change>` is the current branch, which comes first;
+- `changes`: each active change with its `stage`, `light` when it is a light change (no delta specs, one ticket), its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, and `current` when `change/<change>` is the current branch, which comes first;
 - `strayFiles`: uncommitted files outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`;
 - `handOvers`: archived change branches not merged into `base`, each `pushed` or not to `remote`.
 
@@ -31,7 +32,7 @@ If `.claude/hooks/agent-workflow/status.mjs` is missing, the kit is missing or o
 
 ## 3. Find the state
 
-Walk these states in order and stop at the first that applies. The snapshot's `state` decides every state but 3, which only the conversation shows, and the map for a situation in state 9.
+Walk these states in order and stop at the first that applies. The snapshot's `state` decides every state but 3, which only the conversation shows, and, in state 9, light work or the map for a situation.
 
 1. **Not installed** (`not-installed`). Next: `npx github:samfaina/agent-workflow init`, then restart Claude Code.
 2. **Stray files** (`stray-files`). Next: commit or stash the files in `strayFiles`; name them.
@@ -43,7 +44,7 @@ Walk these states in order and stop at the first that applies. The snapshot's `s
 8. **Hand-over pending** (`hand-over-pending`): take the first of `handOvers`.
    - Not `pushed`: Next: `/close-change <x>`.
    - `pushed`: the pull request waits in the code host. Next: review and merge it there; once merged, `git switch <base>` and `git pull`.
-9. **Nothing in flight** (`nothing-in-flight`). Next: `/grill-with-docs` to start a change. When the conversation holds a situation, use **Map off the workflow** instead.
+9. **Nothing in flight** (`nothing-in-flight`). Next: `/grill-with-docs` to start a change. When the conversation describes work that adds, modifies, removes or renames no requirement of the living spec (`openspec/specs/`) and fits one ticket, such as a bug fix, a one-line change or a chore, Next: `/light-change <description or external reference>`, and Why names both conditions. When in doubt about either, recommend `/grill-with-docs`. When the conversation holds another situation, use **Map off the workflow** instead.
 
 **Several active changes** reach states 5 to 7 together: list each change of `changes` with its `stage` and `next`, and mark the one that is `current`. The user picks; this skill does not ask.
 
@@ -58,7 +59,7 @@ Why: ticket 3's blockers (1, 2) are done
 Session: start a fresh one first (/clear)
 ```
 
-- **Where you are**: the state in a few words, with the change and its progress when there is one.
+- **Where you are**: the state in a few words, with the change and its progress when there is one, marking a light change as `(light)`.
 - **Next**: the command, exactly as the user types it.
 - **Why**: the fact from step 2 that decided the state.
 - **Session**: only when the next command is `/to-tickets`, `/implement` or `/close-change` and the conversation holds earlier work. Each of those starts from a fresh session.

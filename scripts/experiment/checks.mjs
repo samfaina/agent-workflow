@@ -23,7 +23,7 @@ export const asksAfterList = (text) => /^\s*(\*\*)?1\.\s[\s\S]*\?/m.test(text);
 // The code-review report, under its two literal headings.
 export const hasReviewHeadings = (text) => /^## Standards\b/m.test(text) && /^## Spec\b/m.test(text);
 
-const WORKFLOW_SKILLS = ['grill-with-docs', 'grilling', 'domain-modeling', 'to-spec', 'to-tickets', 'implement', 'tdd', 'code-review', 'codebase-design', 'close-change'];
+const WORKFLOW_SKILLS = ['grill-with-docs', 'grilling', 'domain-modeling', 'to-spec', 'to-tickets', 'implement', 'tdd', 'code-review', 'codebase-design', 'light-change', 'close-change'];
 
 class Report {
   constructor() {
@@ -118,8 +118,8 @@ export function checkSetup(dir) {
   report.check(`${base} has the installation commit`, commits(dir, base).some((c) => /install agent-workflow/.test(c.subject)), 'no "install agent-workflow" commit');
 
   const installed = existsSync(path.join(dir, '.claude', 'skills')) ? readdirSync(path.join(dir, '.claude', 'skills')) : [];
-  const missing = [...skillsWhere({ tier: 'core' }).map((s) => s.name), 'close-change'].filter((n) => !installed.includes(n));
-  report.check('every core skill and close-change is installed', missing.length === 0, `missing: ${missing.join(', ')}`);
+  const missing = [...skillsWhere({ tier: 'core' }).map((s) => s.name), 'light-change', 'close-change'].filter((n) => !installed.includes(n));
+  report.check('every core skill, light-change and close-change are installed', missing.length === 0, `missing: ${missing.join(', ')}`);
   const excluded = skillsWhere({ tier: 'excluded' }).map((s) => s.name).filter((n) => installed.includes(n));
   report.check('no excluded skill is installed', excluded.length === 0, excluded.join(', '));
   const opsx = installed.filter((n) => n.startsWith('openspec-'));

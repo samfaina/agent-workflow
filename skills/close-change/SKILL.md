@@ -22,7 +22,7 @@ Every check below must hold. When one fails, report which and stop:
 
 - `git branch --show-current` prints `change/<change>`.
 - `git status --porcelain` prints nothing.
-- `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>#N` for the first ticket that has one; the manual test ticket counts. Skip this check for an archived change.
+- `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>#N` for the first ticket that has one; the manual test ticket counts. Skip this check for an archived change. Its `missingPrerequisites` may list `design` for a light change; that blocks nothing.
 - `openspec validate <change> --strict` says the change is valid. Skip this check for an archived change.
 
 An archived change passed the last two checks before its archive: when the first two hold, skip steps 2 to 7 and resume at step 8.
@@ -53,18 +53,23 @@ Run `openspec instructions apply --change <change> --json` again and read every 
 - **Correctness**: every scenario under an ADDED or MODIFIED requirement is handled by the code and covered by a test whose name or assertions match its WHEN and THEN.
 - **Coherence**: every decision in `design.md` is followed, and new code matches the project's existing patterns.
 
-Grade each issue: **CRITICAL** (a missing requirement, a removed behaviour still present, an unticked box), **WARNING** (an uncovered scenario, a design decision not followed), **SUGGESTION** (a pattern inconsistency). Show the report as a table with one row per dimension, followed by the issues grouped by grade.
+A **light change** (`skip_specs: true` in its `.openspec.yaml`) has no delta specs and no `design.md`, so check only two dimensions:
+
+- **Completeness**: every box of its ticket is ticked.
+- **Correctness**: the living spec's scenarios still pass. Run `checkCommand`, which must pass; with none, run the project's tests. For each capability in `openspec/specs/` whose code the change touches, every scenario is still covered by a passing test whose name or assertions match its WHEN and THEN.
+
+Grade each issue: **CRITICAL** (a missing requirement, a removed behaviour still present, an unticked box, a light change's failing tests), **WARNING** (an uncovered scenario, a design decision not followed), **SUGGESTION** (a pattern inconsistency). Show the report as a table with one row per dimension, followed by the issues grouped by grade.
 
 - Any CRITICAL issue: stop here and tell the user what to fix.
 - Any WARNING: ask the user whether to archive anyway.
 
 ### 6. Archive
 
-Run `openspec archive <change> --yes`. Then run `openspec validate --specs --strict` to check the living spec. Commit `docs(<change>): archive change` with the trailers of step 1.
+Run `openspec archive <change> --yes`; a light change's archive leaves the living spec as it is. Then run `openspec validate --specs --strict` to check the living spec. Commit `docs(<change>): archive change` with the trailers of step 1.
 
 ### 7. Report
 
-Summarise in a few lines: the simplification and hardening commits, the security findings left open, the verification table, and the capabilities the living spec gained or changed.
+Summarise in a few lines: the simplification and hardening commits, the security findings left open, the verification table, and the capabilities the living spec gained or changed (none for a light change).
 
 ### 8. Hand the branch over
 

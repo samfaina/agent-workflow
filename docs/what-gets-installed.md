@@ -1,12 +1,12 @@
 # What gets installed
 
-The installer puts two kinds of things into your project. The **kit**'s own pieces come from this repository: the adapter, the `close-change` and `now-what` skills, the hooks, and the templates for `AGENTS.md`, `CLAUDE.md` and OpenSpec's configuration. The skills come from the two **sources**, Matt Pocock's and Addy Osmani's collections, copied unmodified from upstream. OpenSpec itself is a command-line tool you install once per machine (see [the guide](./guide.md)).
+The installer puts two kinds of things into your project. The **kit**'s own pieces come from this repository: the adapter, the `light-change`, `close-change` and `now-what` skills, the hooks, and the templates for `AGENTS.md`, `CLAUDE.md` and OpenSpec's configuration. The skills come from the two **sources**, Matt Pocock's and Addy Osmani's collections, copied unmodified from upstream. OpenSpec itself is a command-line tool you install once per machine (see [the guide](./guide.md)).
 
 ## Files in your project
 
 | Path | What it is |
 | --- | --- |
-| `.claude/skills/<name>/` | Matt's and Addy's skills, copied unmodified from upstream, plus the kit's `close-change` and `now-what` |
+| `.claude/skills/<name>/` | Matt's and Addy's skills, copied unmodified from upstream, plus the kit's `light-change`, `close-change` and `now-what` |
 | `.claude/references/` | Shared checklists that Addy's skills link to |
 | `.claude/hooks/agent-workflow/` | The hooks and the status module (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
@@ -84,7 +84,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 | `doubt-driven-development` | Addy Osmani | excluded | Triggers on every non-trivial decision and overlaps grilling and code-review. |
 <!-- skills-table:end -->
 
-The kit's own skills are always installed: `close-change` chains simplification, security, verification and archive, and `now-what` reads where the work stands and tells you the next command, without running it. Both run only when you type them.
+The kit's own skills are always installed: `light-change` opens a change with no delta specs and one ticket for work too small for a spec, `close-change` chains simplification, security, verification and archive, and `now-what` reads where the work stands and tells you the next command, without running it. All three run only when you type them.
 
 The installer lists each Addy skill it installs in `CLAUDE.md`, with the kind of work it is for, so Claude knows when to reach for it.
 
@@ -121,7 +121,7 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 
 | Command | Prints |
 | --- | --- |
-| `node .claude/hooks/agent-workflow/status.mjs` | The roadmap of each active change, the one on the current branch first |
+| `node .claude/hooks/agent-workflow/status.mjs` | The roadmap of each active change, the one on the current branch first, a light change marked `(light)` |
 | `node .claude/hooks/agent-workflow/status.mjs --json` | The same snapshot as JSON, for scripts |
 | `node .claude/hooks/agent-workflow/status.mjs --statusline` | One line for the change of the current branch, for Claude Code's status line; nothing off a `change/*` branch |
 | `node .claude/hooks/agent-workflow/status.mjs --report [<change>]` | The snapshot of a change as text to paste into a work item |
@@ -205,7 +205,7 @@ Claude posts right after the commit of four transitions. The status module write
 | `{stage}` | When | Message |
 | --- | --- | --- |
 | `spec-published` | `/to-spec` published the change | `add-greeting: spec published` |
-| `tickets-published` | `/to-tickets` published the tickets | `add-greeting: 0 of 4 tickets done` |
+| `tickets-published` | `/to-tickets` published the tickets, or `/light-change` opened a light change, which skips `spec-published` | `add-greeting: 0 of 4 tickets done` |
 | `ticket-done` | `/implement` finished a ticket, the manual test included | `add-greeting: 2 of 4 tickets done` |
 | `change-closed` | `/close-change` handed the branch over | `add-greeting: finished, pull request <url>`, `finished, merged locally` without a remote, or `finished, ready for review` |
 
