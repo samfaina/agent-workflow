@@ -248,7 +248,7 @@ The channel is whatever reaches your tracker. One example of each kind:
 "tracker": { "via": "cli", "command": "my-tracker comment {ref} --body-file {messageFile}" }
 ```
 
-When a post fails, Claude says so, gives you the snapshot to paste, and the workflow goes on. A snapshot already posted is not posted again, and the next one covers a missed one. The roadmap shows a work item that is behind: `PROJ-123: 2 updates behind`. The kit never moves a work item's state; a command of your own may, from `{stage}`. [What gets installed](./what-gets-installed.md#team-tracker) has the details.
+When a post fails, Claude says so, gives you the snapshot to paste, and the workflow goes on. A snapshot already posted is not posted again, and the next one covers a missed one. The roadmap shows a work item that is behind, `PROJ-123: 2 updates behind`, and keeps an archived change there until its hand-over is posted. The kit never moves a work item's state; a command of your own may, from `{stage}`. [What gets installed](./what-gets-installed.md#team-tracker) has the details.
 
 ### Outside a change
 

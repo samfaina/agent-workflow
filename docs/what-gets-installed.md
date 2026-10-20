@@ -190,7 +190,7 @@ The `tracker` setting in `.claude/agent-workflow.json` tells Claude how to post 
 | --- | --- |
 | `{ "via": "none" }` (default, and what a missing setting means) | Posts nothing. `--report` prints the snapshot to paste by hand. |
 | `{ "via": "mcp", "server": "..." }` | Posts the snapshot as a comment on each work item through the tool of that MCP server. The server must be connected to Claude Code. |
-| `{ "via": "cli", "command": "..." }` | Runs `command` once per work item, with its placeholders filled in, from the project folder: in `cmd.exe` on Windows, `sh` elsewhere. It must not ask for input, and it is stopped after 60 seconds. |
+| `{ "via": "cli", "command": "..." }` | Runs `command` once per work item, with its placeholders filled in, from the project folder: in `cmd.exe` on Windows, `sh` elsewhere. It must not ask for input, and it is stopped after 60 seconds. `cmd.exe` expands a `%NAME%` even inside quotes; the kit's messages hold no `%`, but if your references or pull request URLs may, pass `{messageFile}` rather than `{message}` and keep `{ref}` and `{url}` out of the command. |
 
 The command can use eight placeholders, each quoted for the shell when it is filled in: `{ref}` (the external reference), `{change}`, `{stage}`, `{done}` and `{total}` (the tickets done and in all), `{url}` (the pull request, on `change-closed`), `{message}` (the snapshot as text) and `{messageFile}` (the path of a temporary file holding it). For example:
 
@@ -213,8 +213,8 @@ A command that wants to move the work item's state can do so itself from `{stage
 
 - **Authorization**: choosing a `tracker` other than `none` is the authorization. Claude shows each post (`Posted to PROJ-123: 2 of 4 tickets done`) and does not ask before it. `allowPush` does not apply, because nothing is pushed.
 - **Failures**: a failed post never stops the workflow. Claude says so in one line, gives you the snapshot to paste, and goes on.
-- **Duplicates**: a ledger, `agent-workflow/tracker.json` in git's common directory (`git rev-parse --git-common-dir`), keeps the last snapshot posted per change and work item. Every worktree of the clone shares it, and it is never committed. A snapshot equal to the last one is not posted again. A missed one needs no retry, because the next one carries the whole state. Another clone starts with an empty ledger and may repeat a comment.
-- **Lag**: while a work item has missed snapshots, the roadmap says so under the change, for example `PROJ-123: 2 updates behind`.
+- **Duplicates**: a ledger, `agent-workflow/tracker.json` in git's common directory (`git rev-parse --git-common-dir`), keeps the last snapshot posted per change and work item. Every worktree of the clone shares it, and it is never committed. A snapshot equal to the last one is not posted again. A missed one needs no retry, because the next one carries the whole state; only a missed `change-closed` has no next one. Another clone starts with an empty ledger and may repeat a comment.
+- **Lag**: while a work item has missed snapshots, the roadmap says so under the change, for example `PROJ-123: 2 updates behind`. A work item linked after the last post says `not posted yet`: one post catches it up. An archived change whose hand-over was not posted stays in the roadmap, marked `archived`, with the command that posts it.
 
 The installer asks one question, with `none` as the default: type `none`, `mcp:<server>` or a command. It lists the servers in the project's `.mcp.json` as hints and recognises no tracker CLI. Before accepting anything other than `none`, it shows what one post will look like and asks you to confirm. Pass the answer with `--tracker` instead. In a project that already has the kit, running the installer again asks only while `tracker` is missing.
 

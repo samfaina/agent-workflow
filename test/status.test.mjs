@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -605,6 +605,33 @@ describe('projection', () => {
     run(dir, '--project', 'ticket-done', 'add-greeting');
     assert.deepEqual(readStatus(dir).changes[0].behind, {});
     assert.ok(!formatRoadmap(readStatus(dir)).includes('behind'));
+  });
+
+  it('says a work item linked after the last post was never posted, not how many updates it missed', () => {
+    const { dir } = trackerProject({ changes: { 'add-greeting': TWO_TICKETS(1) } });
+    run(dir, '--project', 'ticket-done', 'add-greeting');
+    write(dir, 'openspec/changes/add-greeting/.openspec.yaml', `${REFERENCES['add-greeting']}  - "PROJ-200"\n`);
+    const status = readStatus(dir);
+    assert.deepEqual(status.changes[0].behind, { 'PROJ-200': null });
+    assert.ok(formatRoadmap(status).endsWith('\n  PROJ-200: not posted yet'), formatRoadmap(status));
+  });
+
+  it('shows an archived change whose hand-over was not posted, with the command to post it', () => {
+    const { dir } = trackerProject({ changes: { 'add-greeting': TWO_TICKETS(2) } });
+    run(dir, '--project', 'ticket-done', 'add-greeting');
+    mkdirSync(path.join(dir, 'openspec/changes/archive'), { recursive: true });
+    renameSync(path.join(dir, 'openspec/changes/add-greeting'), path.join(dir, 'openspec/changes/archive/2026-10-19-add-greeting'));
+    const status = readStatus(dir);
+    assert.deepEqual(status.archivedBehind, [{ name: 'add-greeting', behind: { 'PROJ-123': 1, '#42': 1 } }]);
+    assert.ok(formatRoadmap(status).startsWith([
+      'add-greeting · archived',
+      '  PROJ-123: 1 update behind',
+      '  #42: 1 update behind',
+      '  next: node .claude/hooks/agent-workflow/status.mjs --project change-closed add-greeting [--url <pull request>]',
+    ].join('\n')), formatRoadmap(status));
+    run(dir, '--project', 'change-closed', 'add-greeting');
+    assert.deepEqual(readStatus(dir).archivedBehind, []);
+    assert.ok(!formatRoadmap(readStatus(dir)).includes('archived'));
   });
 
   it('says nothing about updates behind without a tracker', () => {

@@ -179,7 +179,8 @@ export function readStatus(projectDir) {
   const installed = existsSync(path.join(projectDir, 'openspec')) && existsSync(path.join(projectDir, '.claude', 'agent-workflow.json'));
   // Work items lag only behind a tracker the agent posts to.
   const ledger = (config.tracker?.via ?? 'none') === 'none' ? null : readLedger(ledgerFile(projectDir));
-  const changes = activeChanges(projectDir)
+  const active = activeChanges(projectDir);
+  const changes = active
     .map((name) => {
       const dir = path.join(projectDir, 'openspec', 'changes', name);
       const change = {
@@ -204,7 +205,7 @@ export function readStatus(projectDir) {
     : changes.length ? [changes[0].stage, changes[0].next]
     : handOvers.length ? ['hand-over-pending', handOvers[0].pushed ? null : `/close-change ${handOvers[0].change}`]
     : ['nothing-in-flight', '/grill-with-docs'];
-  return { state, next, branch, base, remote, changes, strayFiles, handOvers };
+  return { state, next, branch, base, remote, changes, strayFiles, handOvers, archivedBehind: ledger ? archivedBehind(projectDir, ledger, active) : [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -227,15 +228,21 @@ function changeRoadmap(change, marked) {
     lines.push(`  ${MARKS[t.state]} ${note ? labels[i].padEnd(width) + note : labels[i]}`);
   });
   if (change.frontier === null) lines.push(`  next: ${change.next}`);
-  for (const [reference, behind] of Object.entries(change.behind)) lines.push(`  ${reference}: ${behind} update${behind > 1 ? 's' : ''} behind`);
-  return lines.join('\n');
+  return [...lines, ...behindLines(change.behind)].join('\n');
 }
 
-// The developer view: the roadmap of each active change, then what stands in
-// the way or, with no change in flight, the next step.
+const behindLines = (behind) => Object.entries(behind)
+  .map(([reference, n]) => `  ${reference}: ${n === null ? 'not posted yet' : `${n} update${n > 1 ? 's' : ''} behind`}`);
+
+// The developer view: the roadmap of each active change and each archived
+// change with work items behind, then what stands in the way or, with no
+// change in flight, the next step.
 export function formatRoadmap(status) {
   if (status.state === 'not-installed') return `agent-workflow is not installed in this project. Next: ${status.next}`;
   const blocks = status.changes.map((c) => changeRoadmap(c, c.current && status.changes.length > 1));
+  for (const { name, behind } of status.archivedBehind ?? []) {
+    blocks.push([`${name} · archived`, ...behindLines(behind), `  next: ${COMMAND} --project change-closed ${name} [--url <pull request>]`].join('\n'));
+  }
   if (status.strayFiles.length) blocks.push(`Files changed outside a change: ${status.strayFiles.join(', ')}. Commit or stash them first.`);
   if (status.state === 'context-lost') blocks.push(`No change in flight, but GLOSSARY.md or docs/adr/ has uncommitted edits. Next: ${status.next}, then /to-spec <change>`);
   for (const h of status.handOvers) {
@@ -325,17 +332,42 @@ function recordPost(file, name, reference, snapshot) {
 }
 
 // How many transitions a work item has missed: each transition moves a change
-// one step, from the spec (0) through the tickets published (1) and each ticket done.
-const position = ({ stage, done }) => (stage === 'spec-published' || stage === 'no-tickets' ? 0 : 1 + done);
+// one step, from the spec (0) through the tickets published (1), each ticket
+// done, and the hand-over of the archived change.
+const position = ({ stage, done }) => (stage === 'spec-published' || stage === 'no-tickets' ? 0
+  : stage === 'change-closed' ? 2 + done
+  : 1 + done);
 
+// Per reference, the transitions it missed, or null when it was never posted:
+// one post carries the whole state, so a work item linked late is not counted
+// behind for transitions that happened before it was linked.
 export function updatesBehind(change, ledger) {
-  const current = position({ stage: change.stage, done: change.ticketsDone });
+  const current = position({ stage: change.archived ? 'change-closed' : change.stage, done: change.ticketsDone });
   return Object.fromEntries(change.references
     .map((reference) => {
       const last = ledger[change.name]?.[reference];
-      return [reference, current - (last ? position(last) : -1)];
+      return [reference, last ? current - position(last) : null];
     })
-    .filter(([, behind]) => behind > 0));
+    .filter(([, behind]) => behind === null || behind > 0));
+}
+
+// Archived changes the ledger knows of whose work items missed a post, most
+// often the hand-over: no transition follows to catch them up.
+function archivedBehind(projectDir, ledger, active) {
+  return Object.keys(ledger)
+    .filter((name) => !active.includes(name))
+    .sort()
+    .flatMap((name) => {
+      const dir = changeDir(projectDir, name);
+      if (!dir) return [];
+      const change = {
+        ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
+        references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
+        archived: true,
+      };
+      const behind = updatesBehind(change, ledger);
+      return Object.keys(behind).length ? [{ name, behind }] : [];
+    });
 }
 
 // One value quoted for the shell the command runs in: cmd.exe on Windows, sh elsewhere.

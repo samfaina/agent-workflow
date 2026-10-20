@@ -105,6 +105,10 @@ To post the current state once the cause is fixed, ask Claude to project the las
 
 That work item missed the last two snapshots, usually because the posts failed or the transitions ran in another clone. The next transition catches it up. To catch up now, run `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>` with the stage the change is at.
 
+`not posted yet` means the work item was linked after the last post; it is not behind on anything one post does not fix.
+
+Under a change marked `archived`, the hand-over post failed, and no transition follows to catch it up. Run the `next:` command the roadmap shows, with `--url <pull request>` when one was opened.
+
 ### `/implement` picks the wrong ticket
 
 Name it: `/implement <change>#N`. Check the `Blocked by:` lines in `tasks.md`: a ticket starts only when every box of its blockers is ticked.
