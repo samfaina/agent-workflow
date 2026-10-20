@@ -97,7 +97,7 @@ The post to the team tracker failed; the workflow went on, and Claude gave you t
 - **Expired or missing credentials** (`401`, `403`, `unauthorized`): sign in again with your tool. For an MCP server, run `/mcp` in Claude Code and reconnect it. For a command, run it by hand once, for example `my-tracker comment PROJ-123 --body-file note.txt`, and follow what it asks.
 - **`exit code 127`, or "not recognized"**: the command in `tracker` is not installed or not on your PATH.
 - **`timed out after 60 s`**: the command waited for input or for the network. A command must run without asking anything.
-- **"tracker ... is not none, mcp:<server> or a command"**: fix `tracker` in `.claude/agent-workflow.json` by hand. Running the installer again does not change a `tracker` that is already there.
+- **"tracker ... is not none, `mcp:<server>` or a command"**: fix `tracker` in `.claude/agent-workflow.json` by hand. Running the installer again does not change a `tracker` that is already there.
 
 To post the current state once the cause is fixed, ask Claude to project the last transition again, or run `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>` yourself.
 
