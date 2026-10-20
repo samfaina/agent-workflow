@@ -122,12 +122,29 @@ export function parseExternalReferences(yaml) {
   return references.filter(Boolean);
 }
 
+// A light change (ADR 0011): its .openspec.yaml declares `skip_specs: true`, so
+// it has no delta specs and a single ticket.
+const isLight = (yaml) => /^skip_specs:\s*true\s*(?:#.*)?$/m.test(yaml ?? '');
+
 // ---------------------------------------------------------------------------
 // The project
 
 const INSTALL_COMMAND = 'npx github:samfaina/agent-workflow init';
 
 const readIfExists = (file) => (existsSync(file) ? readFileSync(file, 'utf8') : null);
+
+// One change, read from its folder: its progress, whether it is light, its external references.
+function readChange(dir, name) {
+  const metadata = readIfExists(path.join(dir, '.openspec.yaml'));
+  return {
+    ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
+    light: isLight(metadata),
+    references: parseExternalReferences(metadata),
+  };
+}
+
+// A change's name as the developer and the team tracker see it, marking a light change.
+const changeLabel = (change) => (change.light ? `${change.name} (light)` : change.name);
 
 // The active changes: every folder under openspec/changes/ except archive/.
 function activeChanges(projectDir) {
@@ -182,10 +199,8 @@ export function readStatus(projectDir) {
   const active = activeChanges(projectDir);
   const changes = active
     .map((name) => {
-      const dir = path.join(projectDir, 'openspec', 'changes', name);
       const change = {
-        ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
-        references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
+        ...readChange(path.join(projectDir, 'openspec', 'changes', name), name),
         current: branch === `change/${name}`,
       };
       return { ...change, behind: ledger ? updatesBehind(change, ledger) : {} };
@@ -216,7 +231,7 @@ const MARKS = { done: '✓', frontier: '→', ready: '·', blocked: '·' };
 // The roadmap of one change: its tickets, the frontier ticket with its command.
 function changeRoadmap(change, marked) {
   const head = [
-    change.name,
+    changeLabel(change),
     change.stage === 'no-tickets' ? 'no tickets yet' : `${change.ticketsDone} of ${change.ticketsTotal} tickets done`,
     ...(change.references.length ? [change.references.join(', ')] : []),
   ].join(' · ');
@@ -268,7 +283,7 @@ const STAGE_LABELS = {
 // from the spec or the tickets leaves the repository.
 export function formatSnapshot(change) {
   return [
-    `Change: ${change.name}`,
+    `Change: ${changeLabel(change)}`,
     `Stage: ${change.handOver ? `finished, ${change.handOver}` : STAGE_LABELS[change.stage]}`,
     `Tickets done: ${change.ticketsDone} of ${change.ticketsTotal}`,
     ...(change.references.length ? [`Work items: ${change.references.join(', ')}`] : []),
@@ -360,11 +375,7 @@ function archivedBehind(projectDir, ledger, active) {
     .flatMap((name) => {
       const dir = changeDir(projectDir, name);
       if (!dir) return [];
-      const change = {
-        ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
-        references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
-        archived: true,
-      };
+      const change = { ...readChange(dir, name), archived: true };
       const behind = updatesBehind(change, ledger);
       return Object.keys(behind).length ? [{ name, behind }] : [];
     });
@@ -406,10 +417,7 @@ export function project(projectDir, { stage, name, url = '', posted = null }) {
   const dir = changeDir(projectDir, name);
   if (!dir) throw new Error(`No change named ${name}.`);
   const tracker = loadConfig(projectDir).tracker ?? NO_TRACKER;
-  const change = {
-    ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
-    references: parseExternalReferences(readIfExists(path.join(dir, '.openspec.yaml'))),
-  };
+  const change = readChange(dir, name);
   const snapshot = projectionSnapshot(change, stage, { url, remote: remoteOf(projectDir) });
   const ledger = ledgerFile(projectDir);
   const toPaste = formatSnapshot({ ...change, handOver: snapshot.handOver });

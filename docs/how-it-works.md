@@ -12,6 +12,8 @@ A piece of work is a **change**. It goes through five stages, and each stage sta
 
 The stages run in this order every time. When the last one finishes, the change is **archived**: its requirements merge into the **living spec**, the description of what your product does today, and the next change starts from there.
 
+Work too small for a spec, such as a bug fix or a chore, can be a **light change**: one that changes no requirement of the living spec and fits one ticket. `/light-change` replaces the first three stages with a single opening, then the change goes through implement and close like any other (see [Light changes](#light-changes)).
+
 ## Stage by stage
 
 | Stage | You type | Session | What it leaves behind |
@@ -43,6 +45,12 @@ Without a number, `/implement <change>` picks the first ticket whose blockers ar
 ### Close
 
 `/close-change <change>` looks at the change as a whole. It checks that every box is ticked, simplifies the change's code, audits it for security problems, and verifies it against every requirement and scenario of the spec. If something is missing it stops and tells you what. Otherwise it archives the change and hands the branch over. It writes the pull request's title and body and gives you the command to push the branch. If you set up a tool for pull requests (your code host's CLI or MCP server), it offers to open the pull request for you; if not, you open it in your code host with the text it wrote. In a project with no remote, it gives you the commands to merge the branch locally instead. The kit works the same with GitHub, GitLab, Bitbucket or any other code host.
+
+### Light changes
+
+`/light-change <description | external reference>` checks that the work adds, modifies, removes or renames no requirement of the living spec and fits one ticket, and refuses otherwise, pointing you to `/grill-with-docs`. You decide whether work is small; `/now-what` may suggest it. Once you approve a change name, a short `proposal.md` (why and what changes) and one ticket, it creates `change/<change>` and commits them in one go. The change's `.openspec.yaml` declares `skip_specs: true`, which tells OpenSpec it has no delta specs. There is no `design.md` and no manual test ticket: a check by hand is one more acceptance criterion of the ticket.
+
+`/implement <change>` builds the ticket and `/close-change <change>` closes it. Its verification checks only that the ticket is done and that the living spec's scenarios still pass, and its archive leaves the living spec as it is. When the work turns out to need a requirement or a second ticket, Claude stops and leaves a note; `/to-spec <change>` and `/to-tickets <change>` promote it in place, keeping its name, branch and references.
 
 ## Where things live
 
@@ -102,7 +110,7 @@ Matt's skills expect to talk to an issue tracker such as GitHub Issues. The kit 
 
 The kit also leaves some skills out on purpose. Most skills trigger on their own when Claude thinks they fit, so two skills that cover the same ground compete without telling you. Addy's planning skill, for example, would fight `/to-tickets` over how to break up work. [What gets installed](./what-gets-installed.md#skills) lists every skill the kit installs, offers or excludes, with the reason.
 
-The kit adds one workflow skill of its own, `close-change`. It chains Addy's simplification and security skills, a verification against the spec, and OpenSpec's archive.
+The kit adds two workflow skills of its own. `light-change` opens a light change. `close-change` chains Addy's simplification and security skills, a verification against the spec, and OpenSpec's archive.
 
 ## Guardrails
 
@@ -118,15 +126,16 @@ Claude cannot loosen them: their configuration file is itself protected, so chan
 
 | Term | Meaning |
 | --- | --- |
-| **Workflow** | The fixed sequence of stages a change goes through: interview, spec, tickets, implementation (one ticket per session) and close. |
-| **Change** | One unit of planned work, from spec to archive, stored as a folder of OpenSpec files and named in kebab-case, such as `remove-todo`. |
+| **Workflow** | The fixed sequence of stages a change goes through: interview, spec, tickets, implementation (one ticket per session) and close; a light change replaces the first three with a single opening. |
+| **Change** | One unit of planned work, from planning to archive, stored as a folder of OpenSpec files and named in kebab-case, such as `remove-todo`. |
+| **Light change** | A change with no delta specs and a single ticket, for work that leaves the living spec untouched. |
 | **Spec** | The planning files of a change: proposal, delta specs and design. |
 | **Delta spec** | The requirements a change adds, modifies, removes or renames, written against the living spec. |
 | **Living spec** | What the product does today, made by merging the delta specs of every archived change. |
 | **Ticket** | A vertical slice of a change that can be built in one session and demoed or checked on its own. |
 | **Acceptance criterion** | One checkable statement a ticket must satisfy, together with how it is checked. |
 | **Blocker** | A ticket that must be done before another can start. |
-| **Manual test** | The last ticket of every change, in which you try the finished behaviour by hand. |
+| **Manual test** | The last ticket of every change but a light one, in which you try the finished behaviour by hand. |
 | **Seam** | A place in the code where a test can observe behaviour, agreed during `/to-spec`. |
 | **Archive** | Retiring a finished change and merging its delta specs into the living spec. |
 | **Adapter** | The document that tells Matt's skills to read and write OpenSpec as if it were their issue tracker. |

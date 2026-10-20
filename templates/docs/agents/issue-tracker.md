@@ -7,7 +7,7 @@ Specs and tickets for this repo live as **OpenSpec changes** under `openspec/cha
 When a skill says... | ...in this repo it means
 --- | ---
 issue tracker | `openspec/changes/`
-spec, PRD, parent issue | a **change**: `proposal.md`, `specs/**/spec.md` and `design.md` in the change folder
+spec, PRD, parent issue | a **change**: `proposal.md`, `specs/**/spec.md` and `design.md` in the change folder. A **light change** has only `proposal.md` (see **Light changes**)
 ticket, issue, sub-issue | one numbered group `## N. <title>` in the change's `tasks.md` (see **Ticket format**)
 issue number, ticket reference | `<change>` or `<change>#N`, for example `add-greeting#2`
 blocking link, blocked by | the ticket's `Blocked by:` line
@@ -53,7 +53,7 @@ After the commit of four transitions, the change's progress snapshot goes to the
 Stage | Right after the commit of
 --- | ---
 `spec-published` | the spec (**publish to the issue tracker**)
-`tickets-published` | the tickets (**publish the tickets**)
+`tickets-published` | the tickets (**publish the tickets**), or the opening of a light change (**publish a light change**), which skips `spec-published`
 `ticket-done` | the ticket whose last box it ticks, the manual test ticket included
 `change-closed` | the hand-over in `/close-change`
 
@@ -81,9 +81,9 @@ External-Ref: #42
 
 Used by `/to-spec`.
 
-1. Pick the change name: kebab-case, starting with a verb (`add-greeting`, `fix-login-timeout`). If `openspec list` already shows that name, ask the user for another one.
-2. Get onto the change branch (see **Branch**), then run `openspec new change <change>`. When the interview named external references, write them into the change's `.openspec.yaml` (see **External references**). When it named none, do not ask for any.
-3. For each artifact in this order, `proposal`, `specs`, `design`: run `openspec instructions <artifact> --change <change>`, read the files it lists, and write the file at its output path following its instruction, template, `<project_context>` and `<rules>`. Always write `design.md`, even for a small change.
+1. Pick the change name: kebab-case, starting with a verb (`add-greeting`, `fix-login-timeout`). If `openspec list` already shows that name, ask the user for another one, unless it is a light change being promoted (see **Light changes**).
+2. Get onto the change branch (see **Branch**), then run `openspec new change <change>`. When the interview named external references, write them into the change's `.openspec.yaml` (see **External references**). When it named none, do not ask for any. To promote a light change, skip `openspec new change` instead: remove `skip_specs: true` from its `.openspec.yaml` and keep its external references.
+3. For each artifact in this order, `proposal`, `specs`, `design`: run `openspec instructions <artifact> --change <change>`, read the files it lists, and write the file at its output path following its instruction, template, `<project_context>` and `<rules>`. A promoted light change's `proposal.md` is rewritten this way too. Always write `design.md`, however little the change does: only a light change has none.
 4. Map the spec template sections onto the artifacts:
 
    Spec template section | Goes to
@@ -111,12 +111,35 @@ Used by `/to-spec`.
 Used by `/to-tickets`, after the user approves the breakdown.
 
 1. Get onto the change branch (see **Branch**).
-2. Run `openspec instructions tasks --change <change>`, read the files it lists, and write `tasks.md` at its output path. Write one group per approved ticket, in the **Ticket format** below, numbered from 1 in dependency order (blockers first, prefactoring first). Its last group is always the **manual test ticket**.
+2. Run `openspec instructions tasks --change <change>`, read the files it lists, and write `tasks.md` at its output path. Write one group per approved ticket, in the **Ticket format** below, numbered from 1 in dependency order (blockers first, prefactoring first). Its last group is always the **manual test ticket**. For a promoted light change, keep its ticket as ticket 1, with its ticked boxes and its notes (see **Light changes**).
 3. Leave `proposal.md`, the specs and `design.md` as they are: publishing tickets never edits the spec.
 4. Run `openspec validate <change> --strict` until it passes, then `openspec list` and check that the change shows the expected number of tasks.
 5. Commit: `docs(<change>): publish tickets`, with its trailers (see **Commit trailers**).
 6. Project `tickets-published` (see **Projection**).
 7. Run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block: the roadmap of the change, with the command for its first ticket. Never write the roadmap yourself. Then tell the user to build each ticket with `/implement <change>#N`, each in a fresh session, and that `/implement <change>` without a number takes the frontier ticket.
+
+## Light changes
+
+A **light change** is a change with no delta specs and a single ticket, for work that adds, modifies, removes or renames no requirement of the living spec. `/light-change` opens it; `/implement <change>` and `/close-change <change>` take it from there like any other change.
+
+- Its `.openspec.yaml` declares `skip_specs: true`, so `openspec validate --strict` accepts zero deltas. It fails when any file exists under `specs/`.
+- `proposal.md` holds only **Why** and **What Changes**. There is no `design.md`: `openspec status` shows it as pending, which blocks nothing.
+- `tasks.md` holds one ticket and no manual test ticket. A check by hand is one more acceptance criterion of that ticket, ending in `verified by hand: <what to look at>`.
+- `node .claude/hooks/agent-workflow/status.mjs` marks it `(light)`, and its `--json` sets the change's `light` to `true`.
+- **Promotion**: when the work turns out to need a requirement change or a second ticket (see **While working on a ticket**), the change is promoted in place, keeping its name, branch and external references. `/to-spec <change>` removes `skip_specs` and writes the full spec (see **publish to the issue tracker**, steps 1 to 3). `/to-tickets <change>` then rewrites `tasks.md`, keeping the finished work and adding the manual test ticket. A change is never made light again.
+
+## When a skill says "publish a light change"
+
+Used by `/light-change`, after the user approves the change name, the proposal and the ticket.
+
+1. Get onto the change branch (see **Branch**), then run `openspec new change <change>`.
+2. Add `skip_specs: true` to the change's `.openspec.yaml`, then its external references when it has any (see **External references**).
+3. Write `proposal.md` with the approved text under `## Why` and `## What Changes`.
+4. Write `tasks.md` with the approved ticket as its only group, in the **Ticket format** below. Write nothing under `specs/` and no `design.md`.
+5. Run `openspec validate <change> --strict` until it prints that the change is valid, then `openspec list` and check that the change shows the ticket's number of boxes.
+6. Commit the change folder, the one commit of the opening: `docs(<change>): open light change`, with its trailers (see **Commit trailers**).
+7. Project `tickets-published` (see **Projection**).
+8. Run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block: the roadmap of the change, with the command for its ticket. Never write the roadmap yourself.
 
 ## Ticket format
 
@@ -136,7 +159,7 @@ What to build: the end-to-end behaviour this ticket makes work, from the user's 
 - Checkboxes `- [ ] N.M` hold the acceptance criteria and nothing else; each one says how it is verified. OpenSpec counts these boxes as the change's progress.
 - Each ticket includes the tests and docs its own work needs.
 - No file paths or code snippets, as the skills already ask.
-- The **manual test ticket** is the last group, `Blocked by:` every other ticket. Its checkboxes are steps a human performs by hand and the result they should see. Keep it to about five steps: the main path, one failure, and what only a person can judge, such as the docs or the wording of a message. Behaviour the automated tests already cover stays with them. The steps run in order on one fresh setup, so each expected result must follow from the state the earlier steps leave: work out ids, counts and lists from that state, not from the examples in other tickets. A step that needs a different starting state says so.
+- The **manual test ticket** is the last group of every change but a light one, `Blocked by:` every other ticket. Its checkboxes are steps a human performs by hand and the result they should see. Keep it to about five steps: the main path, one failure, and what only a person can judge, such as the docs or the wording of a message. Behaviour the automated tests already cover stays with them. The steps run in order on one fresh setup, so each expected result must follow from the state the earlier steps leave: work out ids, counts and lists from that state, not from the examples in other tickets. A step that needs a different starting state says so.
 
 ## When a skill says "fetch the relevant ticket"
 
@@ -155,6 +178,11 @@ If the ticket is the manual test ticket:
 3. Compare the output with each expected result. Tick only the boxes whose result matches; for the others, add a `- Note:` with what was seen.
 4. The ticket changes only `tasks.md`: skip tdd and code-review, which the build tickets and `/close-change` already cover, and commit the ticked boxes with the trailers of **Commit trailers**, `Refs: <change>#N` first. When every box is ticked, project `ticket-done` (see **Projection**).
 
+If the change is light (`skip_specs: true` in its `.openspec.yaml`):
+
+1. `contextFiles` holds only the proposal and the ticket: together they are its spec. Also read in full each capability of the living spec the ticket touches (`openspec show <capability> --type spec`): the work leaves every requirement as it is.
+2. Build and verify every other box first. Then check each box `verified by hand` as steps 2 and 3 of the manual test ticket say, and tick it in the commit that ends the ticket.
+
 ## While working on a ticket
 
 Used by `/implement`.
@@ -164,6 +192,7 @@ Used by `/implement`.
 - Commit with a Conventional Commits message and the trailers of **Commit trailers**: `Refs: <change>#N`, then the `External-Ref:` lines. The ticked `tasks.md` goes in the same commit as the code.
 - Right after the commit that ticks the ticket's last box, project `ticket-done` (see **Projection**).
 - When the work shows the spec is wrong or incomplete, leave the spec as it is: add a `- Note:` bullet to the ticket and tell the user.
+- In a light change, when the work turns out to add, modify, remove or rename a requirement of the living spec, or to need a second ticket, stop before building that part: add a `- Note:` to the ticket saying what needs it, commit `tasks.md` with the trailers of **Commit trailers**, and tell the user to promote the change with `/to-spec <change>`, then `/to-tickets <change>` (see **Light changes**).
 - In the final message of a build ticket, show the code-review reports under the headings `## Standards` and `## Spec`, written exactly so in every conversation language, as their own sections and not folded into the ticket summary.
 - End the final message with the roadmap: after the commit, run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block. It names the next command, `/implement <change>#N` for the next frontier ticket or `/close-change <change>` when every box of every ticket is ticked. Never write the roadmap yourself.
 
@@ -177,4 +206,4 @@ Used by `/code-review`. Read the `Refs: <change>#N` trailers in `git log <fixed-
 
 ## Archive and the living spec
 
-`openspec/specs/` is the living spec. Only `/close-change` changes it, by running `openspec archive`. Every other skill reads it and leaves it as it is.
+`openspec/specs/` is the living spec. Only `/close-change` changes it, by running `openspec archive`. Every other skill reads it and leaves it as it is. Archiving a light change leaves it as it is too.

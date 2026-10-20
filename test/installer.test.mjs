@@ -109,7 +109,7 @@ describe('installer in a new project', () => {
     assert.ok(commands.some((c) => c.startsWith('openspec init --tools none')));
     assert.ok(!commands.some((c) => /performance-optimization/.test(c)), 'optional skills stay out');
 
-    for (const file of ['.claude/skills/close-change/SKILL.md', '.claude/skills/now-what/SKILL.md', '.claude/hooks/agent-workflow/git-guard.mjs', '.claude/hooks/agent-workflow/shared.mjs', 'docs/agents/issue-tracker.md', 'docs/agents/domain.md']) {
+    for (const file of ['.claude/skills/close-change/SKILL.md', '.claude/skills/light-change/SKILL.md', '.claude/skills/now-what/SKILL.md', '.claude/hooks/agent-workflow/git-guard.mjs', '.claude/hooks/agent-workflow/shared.mjs', 'docs/agents/issue-tracker.md', 'docs/agents/domain.md']) {
       assert.ok(existsSync(path.join(dir, file)), file);
     }
     assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).checkCommand, 'npm test');
