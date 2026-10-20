@@ -121,6 +121,14 @@ export function createConsoleIO({ yes = false, input = process.stdin, output = p
         warn(`Type numbers from 1 to ${choices.length} separated by commas, "all", or press Enter for none.`);
       }
     },
+    // Free text, with `lines` as notes under the question; `fallback` on Enter.
+    async ask({ step, title, detail, lines: notes = [], fallback = '' }) {
+      if (yes) return fallback;
+      heading(step, title, detail);
+      write();
+      for (const note of notes) write(wrap(note, 4, 'dim'));
+      return (await read(`  Answer${fallback ? ` [${fallback}]` : ''}: `)) || fallback;
+    },
     async confirm(question, fallback = false, detail = '') {
       if (yes) return fallback;
       heading(null, question, detail);

@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
+import { fillCommand, formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
 
 const STATUS = fileURLToPath(new URL('../hooks/status.mjs', import.meta.url));
 
@@ -55,12 +55,12 @@ function write(dir, file, content) {
 }
 
 // A git repository with the kit installed and one commit on main.
-function installedProject({ changes = {}, metadata = {} } = {}) {
+function installedProject({ changes = {}, metadata = {}, config = {} } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'aw-status-'));
   git(dir, 'init', '--quiet', '--initial-branch=main');
   git(dir, 'config', 'user.email', 'test@example.com');
   git(dir, 'config', 'user.name', 'Test');
-  write(dir, '.claude/agent-workflow.json', '{ "protectedBranches": ["main", "master"] }\n');
+  write(dir, '.claude/agent-workflow.json', `${JSON.stringify({ protectedBranches: ['main', 'master'], ...config })}\n`);
   write(dir, 'openspec/config.yaml', 'schema: spec-driven\n');
   for (const [change, tasks] of Object.entries(changes)) {
     write(dir, `openspec/changes/${change}/proposal.md`, `# ${change}\n`);
@@ -459,5 +459,190 @@ describe('status command', () => {
     const result = run(installedProject(), '--nope');
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Usage/);
+  });
+});
+
+describe('projection', () => {
+  const run = (dir, ...args) => spawnSync(process.execPath, [STATUS, ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '' } });
+  const REFERENCES = { 'add-greeting': 'x-external-references:\n  - "PROJ-123"\n  - "#42"\n' };
+
+  // A tracker command that appends `{ref} {stage} {message}` to posted.txt, or fails when told to.
+  function trackerProject({ changes = { 'add-greeting': null }, fail = false } = {}) {
+    const scripts = mkdtempSync(path.join(tmpdir(), 'aw-tracker-'));
+    const log = path.join(scripts, 'posted.txt');
+    writeFileSync(path.join(scripts, 'post.mjs'), fail
+      ? "console.error('401 Unauthorized: token expired'); process.exit(1);\n"
+      : `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(log)}, \`\${process.argv.slice(2).join(' ')}\\n\`);\n`);
+    const command = `node "${path.join(scripts, 'post.mjs')}" {ref} {stage} {message}`;
+    const dir = installedProject({ changes, metadata: REFERENCES, config: { tracker: { via: 'cli', command } } });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greeting');
+    const posted = () => (existsSync(log) ? readFileSync(log, 'utf8') : '');
+    return { dir, posted };
+  }
+
+  it('runs the command once per reference with the message of the stage, and shows each post', () => {
+    const { dir, posted } = trackerProject();
+    const result = run(dir, '--project', 'spec-published', 'add-greeting');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Posted to PROJ-123: spec published\nPosted to #42: spec published\n');
+    assert.equal(posted(), 'PROJ-123 spec-published add-greeting: spec published\n#42 spec-published add-greeting: spec published\n');
+  });
+  const TWO_TICKETS = (done) => [
+    '# Tasks', '', '## 1. Greet', '', 'Blocked by: none', '', '- [' + (done >= 1 ? 'x' : ' ') + '] 1.1 greets; verified by a test', '',
+    '## 2. Manual test', '', 'Blocked by: 1', '', '- [' + (done >= 2 ? 'x' : ' ') + '] 2.1 run it by hand', '',
+  ].join('\n');
+
+  it('posts each transition once, the manual test included, and never repeats a snapshot', () => {
+    const { dir, posted } = trackerProject();
+    const transition = (stage, ...args) => {
+      const result = run(dir, '--project', stage, 'add-greeting', ...args);
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout;
+    };
+    transition('spec-published');
+    assert.equal(transition('spec-published'), '', 'the same snapshot again');
+    write(dir, 'openspec/changes/add-greeting/tasks.md', TWO_TICKETS(0));
+    assert.equal(transition('tickets-published'), 'Posted to PROJ-123: 0 of 2 tickets done\nPosted to #42: 0 of 2 tickets done\n');
+    write(dir, 'openspec/changes/add-greeting/tasks.md', TWO_TICKETS(1));
+    transition('ticket-done');
+    write(dir, 'openspec/changes/add-greeting/tasks.md', TWO_TICKETS(2));
+    transition('ticket-done');
+    assert.equal(transition('ticket-done'), '');
+    const lines = posted().split('\n').filter((l) => l.startsWith('PROJ-123 '));
+    assert.deepEqual(lines, [
+      'PROJ-123 spec-published add-greeting: spec published',
+      'PROJ-123 tickets-published add-greeting: 0 of 2 tickets done',
+      'PROJ-123 ticket-done add-greeting: 1 of 2 tickets done',
+      'PROJ-123 ticket-done add-greeting: 2 of 2 tickets done',
+    ]);
+  });
+
+  it('posts the hand-over of an archived change: the pull request, a local merge, or ready for review', () => {
+    const { dir, posted } = trackerProject({ changes: {} });
+    write(dir, 'openspec/changes/archive/2026-10-19-add-greeting/tasks.md', TWO_TICKETS(2));
+    write(dir, 'openspec/changes/archive/2026-10-19-add-greeting/.openspec.yaml', REFERENCES['add-greeting']);
+    assert.equal(run(dir, '--project', 'change-closed', 'add-greeting').stdout, 'Posted to PROJ-123: finished, merged locally\nPosted to #42: finished, merged locally\n');
+    git(dir, 'remote', 'add', 'origin', 'https://example.com/app.git');
+    assert.equal(run(dir, '--project', 'change-closed', 'add-greeting').stdout.split('\n')[0], 'Posted to PROJ-123: finished, ready for review');
+    assert.equal(run(dir, '--project', 'change-closed', 'add-greeting', '--url', 'https://example.com/app/pull/7').stdout.split('\n')[0],
+      'Posted to PROJ-123: finished, pull request https://example.com/app/pull/7');
+    assert.ok(posted().includes('PROJ-123 change-closed add-greeting: finished, pull request https://example.com/app/pull/7\n'), posted());
+  });
+
+  it('does not stop on a failing command: it says so per work item and prints the text to paste', () => {
+    const { dir } = trackerProject({ fail: true });
+    const result = run(dir, '--project', 'spec-published', 'add-greeting');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, [
+      'Could not post to PROJ-123 (exit code 1: 401 Unauthorized: token expired).',
+      'Could not post to #42 (exit code 1: 401 Unauthorized: token expired).',
+      'Paste this into them instead:',
+      'Change: add-greeting',
+      'Stage: spec published, no tickets yet',
+      'Tickets done: 0 of 0',
+      'Work items: PROJ-123, #42',
+      '',
+    ].join('\n'));
+    assert.match(run(dir, '--project', 'spec-published', 'add-greeting').stdout, /^Could not post to PROJ-123/, 'a missed snapshot is not recorded');
+  });
+  it('asks the agent to post through the MCP server and records each post it reports', () => {
+    const dir = installedProject({ changes: { 'add-greeting': null }, metadata: REFERENCES, config: { tracker: { via: 'mcp', server: 'jira' } } });
+    const plan = run(dir, '--project', 'spec-published', 'add-greeting');
+    assert.equal(plan.status, 0, plan.stderr);
+    assert.equal(plan.stdout, [
+      'Post to PROJ-123, #42 with the `jira` MCP server: add-greeting: spec published',
+      'After each post, run: node .claude/hooks/agent-workflow/status.mjs --project spec-published add-greeting --posted "<reference>"',
+      'If a post fails, paste this into the work item instead:',
+      'Change: add-greeting',
+      'Stage: spec published, no tickets yet',
+      'Tickets done: 0 of 0',
+      'Work items: PROJ-123, #42',
+      '',
+    ].join('\n'));
+    assert.equal(run(dir, '--project', 'spec-published', 'add-greeting', '--posted', '#42').stdout, 'Posted to #42: spec published\n');
+    assert.match(run(dir, '--project', 'spec-published', 'add-greeting').stdout, /^Post to PROJ-123 with/);
+    const unknown = run(dir, '--project', 'spec-published', 'add-greeting', '--posted', 'PROJ-9');
+    assert.equal(unknown.status, 1);
+    assert.match(unknown.stderr, /PROJ-9 is not an external reference of add-greeting/);
+  });
+
+  it('posts nothing without a tracker or without references', () => {
+    const none = installedProject({ changes: { 'add-greeting': null }, metadata: REFERENCES });
+    assert.deepEqual([run(none, '--project', 'spec-published', 'add-greeting').status, run(none, '--project', 'spec-published', 'add-greeting').stdout], [0, '']);
+    const { dir, posted } = trackerProject({ changes: { 'add-export': null, 'add-greeting': null } });
+    assert.equal(run(dir, '--project', 'spec-published', 'add-export').stdout, '');
+    assert.equal(posted(), '');
+  });
+
+  it('keeps the ledger in git\'s common directory, shared by worktrees and never committed', () => {
+    const { dir, posted } = trackerProject();
+    run(dir, '--project', 'spec-published', 'add-greeting');
+    assert.ok(existsSync(path.join(dir, '.git', 'agent-workflow', 'tracker.json')));
+    assert.equal(git(dir, 'status', '--porcelain'), '');
+    git(dir, 'switch', '--quiet', 'main');
+    const worktree = path.join(mkdtempSync(path.join(tmpdir(), 'aw-worktree-')), 'wt');
+    git(dir, 'worktree', 'add', '--quiet', worktree, 'change/add-greeting');
+    assert.equal(run(worktree, '--project', 'spec-published', 'add-greeting').stdout, '');
+    assert.equal(posted().split('\n').filter(Boolean).length, 2);
+  });
+
+  it('rejects an unknown stage or a missing change', () => {
+    const dir = installedProject();
+    assert.match(run(dir, '--project', 'spec-done', 'add-greeting').stderr, /Usage/);
+    assert.match(run(dir, '--project', 'spec-published').stderr, /Usage/);
+    const missing = run(dir, '--project', 'spec-published', 'add-nothing');
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /No change named add-nothing/);
+  });
+
+  it('shows in the developer view how many updates each work item is behind', () => {
+    const { dir } = trackerProject({ changes: { 'add-greeting': TWO_TICKETS(1) } });
+    run(dir, '--project', 'spec-published', 'add-greeting');
+    run(dir, '--project', 'spec-published', 'add-greeting', '--posted', '#42');
+    const status = readStatus(dir);
+    assert.deepEqual(status.changes[0].behind, { 'PROJ-123': 2, '#42': 2 });
+    assert.ok(formatRoadmap(status).endsWith('\n  PROJ-123: 2 updates behind\n  #42: 2 updates behind'), formatRoadmap(status));
+    run(dir, '--project', 'ticket-done', 'add-greeting');
+    assert.deepEqual(readStatus(dir).changes[0].behind, {});
+    assert.ok(!formatRoadmap(readStatus(dir)).includes('behind'));
+  });
+
+  it('says a work item linked after the last post was never posted, not how many updates it missed', () => {
+    const { dir } = trackerProject({ changes: { 'add-greeting': TWO_TICKETS(1) } });
+    run(dir, '--project', 'ticket-done', 'add-greeting');
+    write(dir, 'openspec/changes/add-greeting/.openspec.yaml', `${REFERENCES['add-greeting']}  - "PROJ-200"\n`);
+    const status = readStatus(dir);
+    assert.deepEqual(status.changes[0].behind, { 'PROJ-200': null });
+    assert.ok(formatRoadmap(status).endsWith('\n  PROJ-200: not posted yet'), formatRoadmap(status));
+  });
+
+  it('shows an archived change whose hand-over was not posted, with the command to post it', () => {
+    const { dir } = trackerProject({ changes: { 'add-greeting': TWO_TICKETS(2) } });
+    run(dir, '--project', 'ticket-done', 'add-greeting');
+    mkdirSync(path.join(dir, 'openspec/changes/archive'), { recursive: true });
+    renameSync(path.join(dir, 'openspec/changes/add-greeting'), path.join(dir, 'openspec/changes/archive/2026-10-19-add-greeting'));
+    const status = readStatus(dir);
+    assert.deepEqual(status.archivedBehind, [{ name: 'add-greeting', behind: { 'PROJ-123': 1, '#42': 1 } }]);
+    assert.ok(formatRoadmap(status).startsWith([
+      'add-greeting · archived',
+      '  PROJ-123: 1 update behind',
+      '  #42: 1 update behind',
+      '  next: node .claude/hooks/agent-workflow/status.mjs --project change-closed add-greeting [--url <pull request>]',
+    ].join('\n')), formatRoadmap(status));
+    run(dir, '--project', 'change-closed', 'add-greeting');
+    assert.deepEqual(readStatus(dir).archivedBehind, []);
+    assert.ok(!formatRoadmap(readStatus(dir)).includes('archived'));
+  });
+
+  it('says nothing about updates behind without a tracker', () => {
+    const dir = installedProject({ changes: { 'add-greeting': TWO_TICKETS(1) }, metadata: REFERENCES });
+    assert.deepEqual(readStatus(dir).changes[0].behind, {});
+  });
+  it('quotes every placeholder for the shell, so a reference cannot run anything', () => {
+    const values = { ref: "it's; rm -rf ~", stage: 'ticket-done', message: 'say "hi" & $(exit)', done: 2 };
+    assert.equal(fillCommand('t comment {ref} --stage {stage} --body {message} {done}/{total} {unknown}', values, 'linux'),
+      "t comment 'it'\\''s; rm -rf ~' --stage 'ticket-done' --body 'say \"hi\" & $(exit)' '2'/'' {unknown}");
+    assert.equal(fillCommand('t comment {ref} --body {message}', values, 'win32'),
+      't comment "it\'s; rm -rf ~" --body "say ""hi"" & $(exit)"');
   });
 });

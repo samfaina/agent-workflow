@@ -44,6 +44,26 @@ x-external-references:
 - Never create a work item, and never write a closing keyword (`Closes`, `Fixes`, `#close`) in a commit or a pull request: a work item split across several changes would close at the first merge.
 - **Linking later**: get onto the change branch, add the reference to the list, and commit `docs(<change>): link <reference>` with its trailers.
 - `node .claude/hooks/agent-workflow/status.mjs --json` lists them under each change's `references`.
+- **Starting from a work item**: when the user gives an external reference before the change exists, read the work item's title and description through the channel in `tracker` (see **Projection**): with `mcp`, the server's tool that reads a work item; with `cli`, the same tool's command that shows one, when its `--help` lists it. With `none`, or when reading fails, ask the user to paste them. Read only; never edit the work item.
+
+## Projection
+
+After the commit of four transitions, the change's progress snapshot goes to the work items it references, one way only. The `tracker` setting in `.claude/agent-workflow.json` names the channel: `{ "via": "none" }` (also what a missing setting means), `{ "via": "mcp", "server": "<name>" }` or `{ "via": "cli", "command": "..." }`. Choosing a channel at install time is the authorization: show each post, do not ask before it. `allowPush` does not apply.
+
+Stage | Right after the commit of
+--- | ---
+`spec-published` | the spec (**publish to the issue tracker**)
+`tickets-published` | the tickets (**publish the tickets**)
+`ticket-done` | the ticket whose last box it ticks, the manual test ticket included
+`change-closed` | the hand-over in `/close-change`
+
+To project, run `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>`. It writes the text, never you, and keeps a ledger of what each work item has received, so a snapshot already posted is not posted again. It prints nothing when there is nothing to post (no channel, no references, or nothing new). Otherwise:
+
+- `Posted to <reference>: <snapshot>`: show the line as it is.
+- `Could not post to <reference> (<reason>).`: say so in one line, show the text after `Paste this into...` in a code block for the user to paste, and go on with the workflow. Never retry: the next snapshot carries the whole state.
+- `Post to <references> with the <server> MCP server: <message>` (`mcp`): post `<message>` as a comment on each of those work items with that server's tool. After each post that succeeds, run the command the output gives, with the reference in place of `<reference>`, and show the line it prints. When the server or tool is not available, or a post fails, say so in one line and show the text after `If a post fails...` in a code block. Go on either way.
+
+Projection never blocks the workflow, never moves a work item's state and never creates a work item.
 
 ## Commit trailers
 
@@ -83,7 +103,8 @@ Used by `/to-spec`.
    - Every user story is covered by at least one requirement. Several stories may share one requirement.
 5. Run `openspec validate <change> --strict` and fix every error and warning until it prints that the change is valid.
 6. Commit the change folder: `docs(<change>): publish spec`, with its trailers (see **Commit trailers**).
-7. Tell the user the change name and that the next step is `/to-tickets <change>`.
+7. Project `spec-published` (see **Projection**).
+8. Tell the user the change name and that the next step is `/to-tickets <change>`.
 
 ## When a skill says "publish the tickets"
 
@@ -94,7 +115,8 @@ Used by `/to-tickets`, after the user approves the breakdown.
 3. Leave `proposal.md`, the specs and `design.md` as they are: publishing tickets never edits the spec.
 4. Run `openspec validate <change> --strict` until it passes, then `openspec list` and check that the change shows the expected number of tasks.
 5. Commit: `docs(<change>): publish tickets`, with its trailers (see **Commit trailers**).
-6. Run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block: the roadmap of the change, with the command for its first ticket. Never write the roadmap yourself. Then tell the user to build each ticket with `/implement <change>#N`, each in a fresh session, and that `/implement <change>` without a number takes the frontier ticket.
+6. Project `tickets-published` (see **Projection**).
+7. Run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block: the roadmap of the change, with the command for its first ticket. Never write the roadmap yourself. Then tell the user to build each ticket with `/implement <change>#N`, each in a fresh session, and that `/implement <change>` without a number takes the frontier ticket.
 
 ## Ticket format
 
@@ -131,7 +153,7 @@ If the ticket is the manual test ticket:
 1. Before listing the steps, check each expected result against the spec and against the state the steps before it leave. When one cannot happen, say so, add a `- Note:` to the ticket with the result that should happen, and use that one.
 2. List the steps with their expected results, then give them as one block the user pastes into their shell (PowerShell on Windows, bash elsewhere). The block starts from a fresh setup, runs every step in order, and prints each command, its output and its exit code, plus whatever a step asks the user to look at, such as a doc. End the message with a direct question asking for the block's output. Do not offer a list of steps to tick.
 3. Compare the output with each expected result. Tick only the boxes whose result matches; for the others, add a `- Note:` with what was seen.
-4. The ticket changes only `tasks.md`: skip tdd and code-review, which the build tickets and `/close-change` already cover, and commit the ticked boxes with the trailers of **Commit trailers**, `Refs: <change>#N` first.
+4. The ticket changes only `tasks.md`: skip tdd and code-review, which the build tickets and `/close-change` already cover, and commit the ticked boxes with the trailers of **Commit trailers**, `Refs: <change>#N` first. When every box is ticked, project `ticket-done` (see **Projection**).
 
 ## While working on a ticket
 
@@ -140,6 +162,7 @@ Used by `/implement`.
 - Work on the change branch (see **Branch**).
 - Tick a box (`- [x] N.M`) as soon as its criterion is met and verified. The ticket is done when all its boxes are ticked.
 - Commit with a Conventional Commits message and the trailers of **Commit trailers**: `Refs: <change>#N`, then the `External-Ref:` lines. The ticked `tasks.md` goes in the same commit as the code.
+- Right after the commit that ticks the ticket's last box, project `ticket-done` (see **Projection**).
 - When the work shows the spec is wrong or incomplete, leave the spec as it is: add a `- Note:` bullet to the ticket and tell the user.
 - In the final message of a build ticket, show the code-review reports under the headings `## Standards` and `## Spec`, written exactly so in every conversation language, as their own sections and not folded into the ticket summary.
 - End the final message with the roadmap: after the commit, run `node .claude/hooks/agent-workflow/status.mjs` and paste its output verbatim in a code block. It names the next command, `/implement <change>#N` for the next frontier ticket or `/close-change <change>` when every box of every ticket is ticked. Never write the roadmap yourself.
