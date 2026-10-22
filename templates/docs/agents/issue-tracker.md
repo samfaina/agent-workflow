@@ -26,7 +26,7 @@ Every change lives on its own **change branch**, created from a protected branch
 
 Never invent a value for a placeholder:
 
-- The pattern uses `{ref}` and the change has no external reference: stop and offer two ways on. Either the user gives the reference, which becomes the change's first external reference (see **External references**) and fills `{ref}`; or the user gives the branch name for this change by hand, used as is.
+- The pattern uses `{ref}` and the change has no external reference: stop and offer two ways on. Either the user gives the reference, which becomes the change's first external reference (see **External references**) and fills `{ref}`; or the user gives the branch name for this change by hand, checked like any other name below and then used as is.
 - The pattern uses `{user}` and `git config agent-workflow.user` prints nothing: ask the user for their value, run `git config agent-workflow.user <value>`, and go on. The value stays in their clone and is never committed.
 
 Check a new name with `git check-ref-format --branch <name>`. When it fails (a URL as reference, a reference with spaces), say so and stop: never change the name to make it pass. Git is the only judge: `feature/#42-add-greet` is valid.
