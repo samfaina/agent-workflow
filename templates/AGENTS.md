@@ -22,7 +22,7 @@ Specs and tickets live in OpenSpec (`openspec/`), reached only through the steps
 
 ## Git
 
-- Each change lives on `change/<change>`. Protected branches (`protectedBranches` in `.claude/agent-workflow.json`) receive work only through a pull request, or a merge the user makes when the project has no remote. `/close-change` hands the branch over; it opens a pull request only when `pullRequest` in `.claude/agent-workflow.json` names a tool and the user says yes.
+- Each change lives on its own branch, named from `branch` in `.claude/agent-workflow.json` when the change opens (`change/<change>` by default) and kept in its `x-branch` (**Branch** in `docs/agents/issue-tracker.md`). Protected branches (`protectedBranches` in `.claude/agent-workflow.json`) receive work only through a pull request, or a merge the user makes when the project has no remote. `/close-change` hands the branch over; it opens a pull request only when `pullRequest` in `.claude/agent-workflow.json` names a tool and the user says yes.
 - Commit messages follow Conventional Commits. Work on a ticket ends with the trailer `Refs: <change>#N`. A change linked to work items adds one `External-Ref: <reference>` trailer per work item to every commit, and no closing keyword (`Closes`, `Fixes`, `#close`).
 - The user pushes, unless `allowPush` is `true`.
 

@@ -18,11 +18,26 @@ external reference (`PROJ-123`, `#42`, `AB#987`, `ENG-7`, a URL) | the identifie
 
 ## Branch
 
-Every change lives on its own branch, `change/<change>`, created from a protected branch (`protectedBranches` in `.claude/agent-workflow.json`, by default `main` and `master`). Before writing any file of a change:
+Every change lives on its own **change branch**, created from a protected branch (`protectedBranches` in `.claude/agent-workflow.json`, by default `main` and `master`). The change's branch is the first of:
 
-1. Run `git branch --show-current`. If it prints `change/<change>`, you are done.
+- the top-level `x-branch` of `openspec/changes/<change>/.openspec.yaml`, written when the change opened;
+- `change/<change>`, for an existing change without `x-branch`;
+- for a new change, the name made from the `branch` pattern in `.claude/agent-workflow.json` (`change/{change}` when the key is missing): `{change}` is the change name, `{ref}` the first external reference of the change, as written, and `{user}` what `git config agent-workflow.user` prints.
+
+Never invent a value for a placeholder:
+
+- The pattern uses `{ref}` and the change has no external reference: stop and offer two ways on. Either the user gives the reference, which becomes the change's first external reference (see **External references**) and fills `{ref}`; or the user gives the branch name for this change by hand, used as is.
+- The pattern uses `{user}` and `git config agent-workflow.user` prints nothing: ask the user for their value, run `git config agent-workflow.user <value>`, and go on. The value stays in their clone and is never committed.
+
+Check a new name with `git check-ref-format --branch <name>`. When it fails (a URL as reference, a reference with spaces), say so and stop: never change the name to make it pass. Git is the only judge: `feature/#42-add-greet` is valid.
+
+A change's branch is named once. A reference linked later, or a new `branch` pattern, never renames it, and nothing reads a change back out of a branch name.
+
+Before writing any file of a change:
+
+1. Run `git branch --show-current`. If it prints the change's branch, you are done.
 2. Run `git status --porcelain`. If it lists files that are not part of this change (anything outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`), stop and ask the user to commit or stash them first.
-3. If `change/<change>` exists, run `git switch change/<change>`. Otherwise switch to the first protected branch that exists and run `git switch -c change/<change>`; uncommitted change files come along.
+3. If the change's branch exists, run `git switch <branch>`. Otherwise switch to the first protected branch that exists and run `git switch -c <branch>`; uncommitted change files come along.
 
 Pushing is the user's job, unless `allowPush` is `true`. Only `/close-change` opens a pull request, with the tool named in `pullRequest` and after the user says yes.
 
@@ -33,6 +48,7 @@ A change can be linked to the work items it serves in the team tracker. Their **
 ```yaml
 schema: spec-driven
 created: 2026-10-19
+x-branch: "change/add-greeting"
 x-external-references:
   - "PROJ-123"
   - "#42"
@@ -42,7 +58,7 @@ x-external-references:
 - A change has zero or more references, and several changes may share one. A change without any leaves the key out.
 - They travel in every commit of the change (see **Commit trailers**) and in its pull request, so the team tracker can link the work through its own integration with the code host.
 - Never create a work item, and never write a closing keyword (`Closes`, `Fixes`, `#close`) in a commit or a pull request: a work item split across several changes would close at the first merge.
-- **Linking later**: get onto the change branch, add the reference to the list, and commit `docs(<change>): link <reference>` with its trailers.
+- **Linking later**: get onto the change branch, add the reference to the list, and commit `docs(<change>): link <reference>` with its trailers. The branch keeps its name, even when its pattern uses `{ref}`.
 - `node .claude/hooks/agent-workflow/status.mjs --json` lists them under each change's `references`.
 - **Starting from a work item**: when the user gives an external reference before the change exists, read the work item's title and description through the channel in `tracker` (see **Projection**): with `mcp`, the server's tool that reads a work item; with `cli`, the same tool's command that shows one, when its `--help` lists it. With `none`, or when reading fails, ask the user to paste them. Read only; never edit the work item.
 
@@ -82,7 +98,7 @@ External-Ref: #42
 Used by `/to-spec`.
 
 1. Pick the change name: kebab-case, starting with a verb (`add-greeting`, `fix-login-timeout`). If `openspec list` already shows that name, ask the user for another one, unless it is a light change being promoted (see **Light changes**).
-2. Get onto the change branch (see **Branch**), then run `openspec new change <change>`. When the interview named external references, write them into the change's `.openspec.yaml` (see **External references**). When it named none, do not ask for any. To promote a light change, skip `openspec new change` instead: remove `skip_specs: true` from its `.openspec.yaml` and keep its external references.
+2. Get onto the change branch (see **Branch**), then run `openspec new change <change>`. Write the branch's name, in double quotes, as the top-level `x-branch` of the change's `.openspec.yaml`, whatever the pattern, the default included. When the interview named external references, write them there too (see **External references**). When it named none, do not ask for any, unless the pattern needs `{ref}` (see **Branch**). To promote a light change, skip `openspec new change` instead: remove `skip_specs: true` from its `.openspec.yaml` and keep its `x-branch` and external references.
 3. For each artifact in this order, `proposal`, `specs`, `design`: run `openspec instructions <artifact> --change <change>`, read the files it lists, and write the file at its output path following its instruction, template, `<project_context>` and `<rules>`. A promoted light change's `proposal.md` is rewritten this way too. Always write `design.md`, however little the change does: only a light change has none.
 4. Map the spec template sections onto the artifacts:
 
@@ -126,14 +142,14 @@ A **light change** is a change with no delta specs and a single ticket, for work
 - `proposal.md` holds only **Why** and **What Changes**. There is no `design.md`: `openspec status` shows it as pending, which blocks nothing.
 - `tasks.md` holds one ticket and no manual test ticket. A check by hand is one more acceptance criterion of that ticket, ending in `verified by hand: <what to look at>`.
 - `node .claude/hooks/agent-workflow/status.mjs` marks it `(light)`, and its `--json` sets the change's `light` to `true`.
-- **Promotion**: when the work turns out to need a requirement change or a second ticket (see **While working on a ticket**), the change is promoted in place, keeping its name, branch and external references. `/to-spec <change>` removes `skip_specs` and writes the full spec (see **publish to the issue tracker**, steps 1 to 3). `/to-tickets <change>` then rewrites `tasks.md`, keeping the finished work and adding the manual test ticket. A change is never made light again.
+- **Promotion**: when the work turns out to need a requirement change or a second ticket (see **While working on a ticket**), the change is promoted in place, keeping its name, its branch (`x-branch`) and its external references. `/to-spec <change>` removes `skip_specs` and writes the full spec (see **publish to the issue tracker**, steps 1 to 3). `/to-tickets <change>` then rewrites `tasks.md`, keeping the finished work and adding the manual test ticket. A change is never made light again.
 
 ## When a skill says "publish a light change"
 
 Used by `/light-change`, after the user approves the change name, the proposal and the ticket.
 
 1. Get onto the change branch (see **Branch**), then run `openspec new change <change>`.
-2. Add `skip_specs: true` to the change's `.openspec.yaml`, then its external references when it has any (see **External references**).
+2. Add `skip_specs: true` to the change's `.openspec.yaml`, then the branch's name as `x-branch`, in double quotes (see **Branch**), then its external references when it has any (see **External references**).
 3. Write `proposal.md` with the approved text under `## Why` and `## What Changes`.
 4. Write `tasks.md` with the approved ticket as its only group, in the **Ticket format** below. Write nothing under `specs/` and no `design.md`.
 5. Run `openspec validate <change> --strict` until it prints that the change is valid, then `openspec list` and check that the change shows the ticket's number of boxes.

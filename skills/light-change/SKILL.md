@@ -37,6 +37,6 @@ Show the name, the proposal and the ticket, and ask the user to approve them or 
 
 ### 4. Publish
 
-Follow **When a skill says "publish a light change"** in the adapter. It cuts `change/<change>`, writes the files, validates them, commits once, projects and pastes the roadmap.
+Follow **When a skill says "publish a light change"** in the adapter. It cuts the change's branch (see **Branch** in the adapter), writes the files, validates them, commits once, projects and pastes the roadmap.
 
 End by telling the user to build the ticket with `/implement <change>` in a fresh session, then close it with `/close-change <change>`.
