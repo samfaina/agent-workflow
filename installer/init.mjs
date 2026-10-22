@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { askBranch, DEFAULT_BRANCH, parseBranch, setBranchUser } from './branch.mjs';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
 import { addPackageScript, ensureGitignored, mergeSettings, settingsHave, writeBlockSafely, writeFileSafely, writeLanguageSetting, writeLocalSetting } from './files.mjs';
 import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
@@ -46,6 +47,8 @@ export async function init({
   language,
   checkCommand,
   pullRequest,
+  branch,
+  user,
   tracker,
   statusLine,
   homeDir = homedir(),
@@ -60,13 +63,16 @@ export async function init({
   if (!existsSync(path.join(projectDir, '.git'))) {
     io.warn('This folder is not a git repository. The hooks expect one: run `git init` first.');
   }
-  // A project that already chose how pull requests are opened, or how progress
-  // reaches its team tracker, is not asked again.
+  // A project that already chose how pull requests are opened, how change
+  // branches are named, or how progress reaches its team tracker, is not asked again.
   const workflowConfigFile = path.join(claudeDir, 'agent-workflow.json');
   const existingConfig = readWorkflowConfig(workflowConfigFile) ?? {};
   const askPullRequest = pullRequest === undefined && !('pullRequest' in existingConfig);
+  const askBranchQuestion = branch === undefined && !('branch' in existingConfig);
   const askTrackerQuestion = tracker === undefined && !('tracker' in existingConfig);
-  const steps = 2 + askPullRequest + askTrackerQuestion;
+  const steps = 2 + askPullRequest + askBranchQuestion + askTrackerQuestion;
+  // A wrong --branch stops the run before anything is written.
+  const branchSetting = branch === undefined ? undefined : parseBranch(branch, { projectDir, run });
   language ??= await io.choose({
     step: `1/${steps}`,
     title: 'Language',
@@ -93,6 +99,10 @@ export async function init({
   const pullRequestSetting = parsePullRequest(pullRequest ?? 'none');
   const followUp = pullRequest === undefined ? null : pullRequestFollowUp(pullRequestSetting, projectDir, run);
   if (followUp?.warning) io.warn(followUp.warning);
+  const branchPattern = askBranchQuestion
+    ? await askBranch({ io, projectDir, run, step: `${3 + askPullRequest}/${steps}` })
+    : branchSetting ?? existingConfig.branch ?? DEFAULT_BRANCH;
+  await setBranchUser(branchPattern, { io, projectDir, run, user });
   const trackerSetting = askTrackerQuestion
     ? await askTracker({ io, projectDir, step: `${steps}/${steps}` })
     : parseTracker(tracker ?? 'none');
@@ -171,12 +181,14 @@ export async function init({
   const inline = (setting) => JSON.stringify(setting, null, 1).replace(/\n\s*/g, ' ');
   const workflowConfig = template('.claude/agent-workflow.json')
     .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
+    .replace('"{{BRANCH}}"', JSON.stringify(branchPattern))
     .replace('"{{PULL_REQUEST}}"', inline(pullRequestSetting))
     .replace('"{{TRACKER}}"', inline(trackerSetting));
   // Settings asked for or passed by flag in this run go in without a second question.
   const answered = [
     'checkCommand',
     ...(pullRequest === undefined ? [] : ['pullRequest']),
+    ...(askBranchQuestion || branch !== undefined ? ['branch'] : []),
     ...(askTrackerQuestion || tracker !== undefined ? ['tracker'] : []),
   ];
   if (existsSync(workflowConfigFile)) await mergeWorkflowConfig(workflowConfigFile, JSON.parse(workflowConfig), { ...ctx, answered });
