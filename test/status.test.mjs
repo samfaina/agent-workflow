@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSy
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fillCommand, formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
+import { changeBranch, fillCommand, formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
 
 const STATUS = fileURLToPath(new URL('../hooks/status.mjs', import.meta.url));
 
@@ -388,11 +388,11 @@ describe('counts against OpenSpec', { skip: !openspecInstalled && 'openspec is n
   });
 });
 
-describe('external references in OpenSpec', { skip: !openspecInstalled && 'openspec is not installed' }, () => {
+describe('external references and x-branch in OpenSpec', { skip: !openspecInstalled && 'openspec is not installed' }, () => {
   it('passes validate --strict and survives the archive', () => {
     const dir = installedProject({
       changes: { 'add-greeting': '## 1. Greet\n\nBlocked by: none\n\n- [x] 1.1 greets; verified by a test\n' },
-      metadata: { 'add-greeting': 'schema: spec-driven\ncreated: 2026-10-19\nx-external-references:\n  - PROJ-1\n  - "#42"\n' },
+      metadata: { 'add-greeting': 'schema: spec-driven\ncreated: 2026-10-19\nx-branch: "feature/#42-add-greeting"\nx-external-references:\n  - PROJ-1\n  - "#42"\n' },
     });
     write(dir, 'openspec/changes/add-greeting/proposal.md', '## Why\n\nUsers starting the CLI should be greeted so they know it works.\n\n## What Changes\n\n- Print a greeting.\n\n## Capabilities\n\n### New Capabilities\n\n- `greeting`: greets the user.\n\n### Modified Capabilities\n\nNone.\n\n## Impact\n\nThe CLI.\n');
     write(dir, 'openspec/changes/add-greeting/specs/greeting/spec.md', '## ADDED Requirements\n\n### Requirement: Greet the user\n\nThe CLI SHALL print a greeting when it starts.\n\n#### Scenario: Start the CLI\n\n- **WHEN** the user starts the CLI\n- **THEN** it prints "Hello"\n');
@@ -404,6 +404,7 @@ describe('external references in OpenSpec', { skip: !openspecInstalled && 'opens
     const [folder] = readdirSync(path.join(dir, 'openspec', 'changes', 'archive'));
     const yaml = readFileSync(path.join(dir, 'openspec', 'changes', 'archive', folder, '.openspec.yaml'), 'utf8');
     assert.deepEqual(parseExternalReferences(yaml), ['PROJ-1', '#42']);
+    assert.equal(changeBranch('add-greeting', yaml), 'feature/#42-add-greeting');
   });
 });
 

@@ -19,7 +19,7 @@ Work too small for a spec, such as a bug fix or a chore, can be a **light change
 | Stage | You type | Session | What it leaves behind |
 | --- | --- | --- | --- |
 | Interview | `/grill-with-docs <idea>` | new | new terms in `GLOSSARY.md`, decisions in `docs/adr/` |
-| Spec | `/to-spec <change>` | same as the interview | the branch `change/<change>`, with `proposal.md`, delta specs and `design.md` |
+| Spec | `/to-spec <change>` | same as the interview | the change's branch (`change/<change>` by default), with `proposal.md`, delta specs and `design.md` |
 | Tickets | `/to-tickets <change>` | new | `tasks.md` with numbered tickets |
 | Implement | `/implement <change>#N` | new, for every ticket | code and tests, ticked boxes, a commit with `Refs: <change>#N` (plus `External-Ref:` for each work item) |
 | Close | `/close-change <change>` | new | simplification and security fixes, the archived change, an updated living spec |
@@ -30,7 +30,7 @@ Work too small for a spec, such as a bug fix or a chore, can be a **light change
 
 ### Spec
 
-`/to-spec <change>` turns the interview into an OpenSpec change. It creates the branch `change/<change>`, agrees with you on the **seams** where tests will go, and writes three kinds of file: `proposal.md` (why and what, plus what is out of scope), one **delta spec** per capability (requirements with scenarios written as WHEN and THEN), and `design.md` (decisions and the test seams). It runs `openspec validate --strict` until the change is valid, then commits.
+`/to-spec <change>` turns the interview into an OpenSpec change. It creates the change's branch, named from the `branch` pattern in `.claude/agent-workflow.json` (`change/<change>` by default, see [Change branches](./what-gets-installed.md#change-branches)) and kept in the change's `x-branch`, agrees with you on the **seams** where tests will go, and writes three kinds of file: `proposal.md` (why and what, plus what is out of scope), one **delta spec** per capability (requirements with scenarios written as WHEN and THEN), and `design.md` (decisions and the test seams). It runs `openspec validate --strict` until the change is valid, then commits.
 
 ### Tickets
 
