@@ -56,7 +56,7 @@ A guardrail stopped Claude, or never runs.
 
 ### Claude says "agent-workflow git-guard: ... is a protected branch"
 
-You are on `main`. The change branch is created by `/to-spec`; for work outside a change, create a branch yourself: `git switch -c <type>/<name>`.
+You are on a protected branch, such as `main`. The change branch is created by `/to-spec` or `/light-change`, named from the `branch` pattern the message shows; for work outside a change, create a branch yourself: `git switch -c <type>/<name>`.
 
 ### Claude says "agent-workflow quality-gate: ... failed"
 
@@ -83,7 +83,7 @@ OpenSpec accepts extra keys only with the `x-` prefix; any other unknown key fai
 Your tracker's integration with your code host does the linking, not the kit. Check, in order:
 
 - the reference in `.openspec.yaml` is written exactly as the tracker shows it, case included, and in quotes: an unquoted `#42` is a YAML comment, so the change has no reference. `npm run workflow:status` names the references in each change's header;
-- the commits carry the trailer: `git log --format=%B change/<change>` shows `External-Ref:` lines. Commits made before you linked the work item have none, but the pull request title and body still name it;
+- the commits carry the trailer: `git log --format=%B <branch>` shows `External-Ref:` lines, where `<branch>` is the change's `x-branch` in its `.openspec.yaml`, or `change/<change>` when it has none. Commits made before you linked the work item have none, but the pull request title and body still name it;
 - the branch is pushed: an integration sees only what reaches the code host;
 - the integration is set up between your tracker and your code host, and looks where the kit writes the reference: [the guide](./guide.md#link-a-change-to-your-team-tracker) lists where each tracker looks.
 
@@ -109,6 +109,18 @@ That work item missed the last two snapshots, usually because the posts failed o
 
 Under a change marked `archived`, the hand-over post failed, and no transition follows to catch it up. Run the `next:` command the roadmap shows, with `--url <pull request>` when one was opened.
 
+### Claude stops because the branch name is not valid
+
+The `branch` pattern in `.claude/agent-workflow.json` gave a name that `git check-ref-format --branch` rejects, usually because the external reference is a URL or has spaces. Claude never rewrites the name to make it pass. Give the reference in the form your team writes it (`PROJ-123` rather than its URL), or give Claude the branch name for this change by hand: it checks it with git and keeps it in the change's `x-branch`.
+
+### Claude asks for an external reference before creating the branch
+
+The `branch` pattern uses `{ref}` and the change has none. Give the work item's reference, which Claude also links to the change, or give the branch name for this change by hand. To stop being asked for changes with no work item, use a pattern without `{ref}`.
+
+### Claude asks for my value for `{user}`
+
+The `branch` pattern uses `{user}`, and your clone has no `agent-workflow.user`. Answer once, or set it yourself: `git config agent-workflow.user SF`. It lives in your clone's git config and is never committed, so each developer sets their own.
+
 ### `/implement` picks the wrong ticket
 
 Name it: `/implement <change>#N`. Check the `Blocked by:` lines in `tasks.md`: a ticket starts only when every box of its blockers is ticked.
@@ -119,4 +131,4 @@ Some box in `tasks.md` is unticked, often the manual test. Run the `/implement <
 
 ### `/close-change` archived the change but the pull request was never opened
 
-The hand-over did not finish: the branch was never pushed, or opening the pull request failed. Run `/close-change <change>` again on `change/<change>` with a clean tree. It sees the change is archived, checks only the branch and the clean tree, and goes straight to the hand-over.
+The hand-over did not finish: the branch was never pushed, or opening the pull request failed. Run `/close-change <change>` again on the change's branch with a clean tree. It sees the change is archived, checks only the branch and the clean tree, and goes straight to the hand-over.

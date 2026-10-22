@@ -58,6 +58,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    - **Language**: the language Claude talks to you in: English, Spanish or another one. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
    - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. The installer proposes `npm test` when `package.json` has a test script; choose "None" if the project has no checks yet. You can set it later in `.claude/agent-workflow.json`.
    - **Pull requests**: how `/close-change` opens them: GitHub (`gh`), GitLab (`glab`), Bitbucket (Atlassian's MCP server), another MCP server connected to Claude Code, a command of your own, or "None" to open them yourself in your code host. When your remote is on GitHub or GitLab and its CLI is installed, that host is the default. If the CLI is missing or you pick an MCP server, the installer adds how to install or connect it to its next steps. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders for your own command.
+   - **Branch names**: how the branch of each new change is named: `change/{change}` (the default), `feature/{ref}-{change}` for gitflow with work items, or a pattern of your own using `{change}`, `{ref}` and `{user}`. When it uses `{user}`, the installer also asks for your value. See [Gitflow and work items in branch names](#gitflow-and-work-items-in-branch-names).
    - **Team tracker**: how Claude posts each change's progress to the work items it references. Type `none` (the default), `mcp:<server>` for an MCP server connected to Claude Code, or a command of your own, such as `my-tracker comment {ref} --body-file {messageFile}`. The installer lists the servers in `.mcp.json` as hints, and before accepting anything but `none` it shows what a post will look like. [What gets installed](./what-gets-installed.md#team-tracker) lists the placeholders.
    - **Optional skills**: one list with the reason for each skill. Type the numbers of the topics your project touches, separated by commas, `all`, or press Enter for none. You can run the installer again later to add more.
    - **Status line**: whether Claude Code's status line shows where the change of the current branch stands, such as `add-greeting · 2/4 · next #3`. The default is yes. The installer saves it in `.claude/settings.local.json`, so your team does not get it. If you have a status line of your own in `~/.claude/settings.json`, it asks instead whether to use the kit's in this project only, with no as the default ([Status line](./what-gets-installed.md#status-line)).
@@ -82,7 +83,7 @@ The installer never overwrites an existing file without asking. Run it again at 
 npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --tracker none --optional none
 ```
 
-`--yes` accepts every default and keeps every existing file. It leaves out the status line, a personal preference. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--tracker` takes `none`, `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
+`--yes` accepts every default and keeps every existing file. It leaves out the status line, a personal preference. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--branch` takes a branch pattern in quotes, and `--user` your value for `{user}`. `--tracker` takes `none`, `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
 
 ## 3. Install the kit in an existing project
 
@@ -250,9 +251,31 @@ The channel is whatever reaches your tracker. One example of each kind:
 
 When a post fails, Claude says so, gives you the snapshot to paste, and the workflow goes on. A snapshot already posted is not posted again, and the next one covers a missed one. The roadmap shows a work item that is behind, `PROJ-123: 2 updates behind`, and keeps an archived change there until its hand-over is posted. The kit never moves a work item's state; a command of your own may, from `{stage}`. [What gets installed](./what-gets-installed.md#team-tracker) has the details.
 
+### Gitflow and work items in branch names
+
+Every change gets its own branch, `change/<change>` by default. A team on gitflow, or whose code host links work items by the key in the branch name, sets two keys in `.claude/agent-workflow.json` instead:
+
+```json
+"protectedBranches": ["develop", "main"],
+"branch": "feature/{ref}-{change}"
+```
+
+- `protectedBranches` lists the branches that receive work only through a pull request. The first one that exists is the base: changes branch off `develop` and their pull requests go back into it.
+- `branch` is the pattern for the name of each new change's branch. `{change}` is the change name, `{ref}` its first external reference as written, and `{user}` your own value. `feature/{ref}-{change}` gives `feature/PROJ-123-remove-todo`, which Jira picks up through Bitbucket.
+
+`agent-workflow.json` is shared, so a per-developer part of the name comes from each clone's git config. With `"branch": "{ref}__{change}--{user}"`, each developer runs once:
+
+```powershell
+git config agent-workflow.user SF
+```
+
+and their branches look like `PROJ-123__remove-todo--SF`. The installer runs it for you when the pattern uses `{user}`; when the value is missing, Claude asks for it the first time it opens a change.
+
+Claude names the branch once, when `/to-spec` or `/light-change` opens the change, and keeps the name in the change's `.openspec.yaml` as `x-branch`. Linking a work item later, or changing the pattern, renames no branch. When the pattern uses `{ref}` and the change has no external reference, Claude stops and asks you for the reference, or for the branch name itself. A name git rejects, such as one made from a URL, stops it too: give the reference in a shorter form, or the branch name by hand.
+
 ### Outside a change
 
-- **Work too small for a spec**: a bug fix, a one-line change or a chore that changes no requirement of the living spec and fits one ticket. Type `/light-change <what to do>`, or give it an external reference: `/light-change PROJ-123`. Claude checks both conditions against `openspec/specs/`, proposes a change name, a two-section proposal and one ticket, and once you approve them, commits them on `change/<change>`. Then `/implement <change>` and `/close-change <change>`, each in a fresh session, as for any change. The roadmap marks it `fix-typo (light) · 0 of 1 tickets done`. There is no manual test ticket: a check by hand is one more box of the ticket. When Claude refuses because the work needs a requirement or more than one ticket, start from `/grill-with-docs`. When that turns out midway, Claude stops and leaves a note: run `/to-spec <change>` and `/to-tickets <change>` to promote it, keeping its name, branch and references.
+- **Work too small for a spec**: a bug fix, a one-line change or a chore that changes no requirement of the living spec and fits one ticket. Type `/light-change <what to do>`, or give it an external reference: `/light-change PROJ-123`. Claude checks both conditions against `openspec/specs/`, proposes a change name, a two-section proposal and one ticket, and once you approve them, commits them on the change's branch (`change/<change>` by default). Then `/implement <change>` and `/close-change <change>`, each in a fresh session, as for any change. The roadmap marks it `fix-typo (light) · 0 of 1 tickets done`. There is no manual test ticket: a check by hand is one more box of the ticket. When Claude refuses because the work needs a requirement or more than one ticket, start from `/grill-with-docs`. When that turns out midway, Claude stops and leaves a note: run `/to-spec <change>` and `/to-tickets <change>` to promote it, keeping its name, branch and references.
 - **A bug**: describe it and say "diagnose this"; `diagnosing-bugs` builds a failing loop before guessing at causes. For a fix worth a spec, run the flow from `/grill-with-docs`.
 - **A design question**: ask for a prototype; `prototype` builds a throwaway one.
 - **A review of any branch**: `/code-review main`.

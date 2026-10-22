@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // agent-workflow CLI. Run it inside a project:
-//   npx github:samfaina/agent-workflow init [dir] [--yes] [--language <name>] [--check <command>] [--pull-request <how>] [--tracker <how>] [--optional all|none|a,b]
+//   npx github:samfaina/agent-workflow init [dir] [--yes] [--language <name>] [--check <command>] [--pull-request <how>] [--branch <pattern>] [--user <value>] [--tracker <how>] [--optional all|none|a,b]
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { skillsTable } from '../installer/catalog.mjs';
@@ -14,6 +14,8 @@ const { values, positionals } = parseArgs({
     language: { type: 'string' },
     check: { type: 'string' },
     'pull-request': { type: 'string' },
+    branch: { type: 'string' },
+    user: { type: 'string' },
     tracker: { type: 'string' },
     optional: { type: 'string' },
     help: { type: 'boolean', short: 'h', default: false },
@@ -33,6 +35,9 @@ Options for init:
   --pull-request <how> How /close-change opens pull requests: none, github, gitlab,
                        bitbucket (Atlassian's MCP server), mcp:<server>, or a command
                        using {base} {branch} {title} {body} {bodyFile}
+  --branch <pattern>   How each new change's branch is named (default: change/{change}),
+                       using {change}, and optionally {ref} and {user}
+  --user <value>       Your value for {user}, stored with git config agent-workflow.user
   --tracker <how>      How Claude posts progress to your team tracker: none, mcp:<server>,
                        or a command using {ref} {change} {stage} {done} {total} {url}
                        {message} {messageFile}
@@ -50,7 +55,7 @@ if (values.help || !command) {
   try {
     // The status line is a personal preference: --yes leaves it out instead of accepting it.
     const statusLine = values.yes ? false : undefined;
-    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], tracker: values.tracker, statusLine, optional });
+    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], branch: values.branch, user: values.user, tracker: values.tracker, statusLine, optional });
   } catch (error) {
     console.error(`\nagent-workflow: ${error.message}`);
     process.exitCode = 1;

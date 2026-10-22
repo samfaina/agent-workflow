@@ -16,7 +16,7 @@ const ATLASSIAN_DOCS = 'https://support.atlassian.com/atlassian-rovo-mcp-server/
 const PLACEHOLDERS = [
   'Placeholders, quoted for the shell when filled in:',
   '{base}      the protected branch',
-  '{branch}    change/<change>',
+  '{branch}    the change\'s branch',
   '{title}     the pull request title',
   '{body}      the body as text',
   '{bodyFile}  a temporary file holding the body',

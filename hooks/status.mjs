@@ -122,6 +122,14 @@ export function parseExternalReferences(yaml) {
   return references.filter(Boolean);
 }
 
+// The branch a change lives on: the top-level `x-branch` of its .openspec.yaml,
+// written once when the change opens (ADR 0012). A change made before that key
+// existed lives on `change/<change>`. A branch name is never parsed back into a change.
+export function changeBranch(name, yaml) {
+  const line = (yaml ?? '').replace(/\r\n/g, '\n').match(/^x-branch:[ \t]*(.*)$/m);
+  return (line && yamlScalar(line[1])) || `change/${name}`;
+}
+
 // A light change (ADR 0011): its .openspec.yaml declares `skip_specs: true`, so
 // it has no delta specs and a single ticket.
 const isLight = (yaml) => /^skip_specs:\s*true\s*(?:#.*)?$/m.test(yaml ?? '');
@@ -132,14 +140,19 @@ const isLight = (yaml) => /^skip_specs:\s*true\s*(?:#.*)?$/m.test(yaml ?? '');
 const INSTALL_COMMAND = 'npx github:samfaina/agent-workflow init';
 
 const readIfExists = (file) => (existsSync(file) ? readFileSync(file, 'utf8') : null);
+// A change folder's .openspec.yaml, null when it has none.
+const metadataIn = (dir) => readIfExists(path.join(dir, '.openspec.yaml'));
+// The change name of an archive folder, `2026-10-01-add-greeting`, or undefined.
+const archivedName = (folder) => /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(folder)?.[1];
 
-// One change, read from its folder: its progress, whether it is light, its external references.
+// One change, read from its folder: its progress, whether it is light, its external references and its branch.
 function readChange(dir, name) {
-  const metadata = readIfExists(path.join(dir, '.openspec.yaml'));
+  const metadata = metadataIn(dir);
   return {
     ...changeProgress(name, readIfExists(path.join(dir, 'tasks.md'))),
     light: isLight(metadata),
     references: parseExternalReferences(metadata),
+    branch: changeBranch(name, metadata),
   };
 }
 
@@ -173,16 +186,37 @@ function dirtyPaths(projectDir) {
 const isChangeWork = (file) => /^openspec\/changes\/[^/]+\//.test(file) || isContextWork(file);
 const isContextWork = (file) => file === 'GLOSSARY.md' || file.startsWith('docs/adr/');
 
-// Change branches not merged into `base` whose change is archived on the branch:
-// /close-change has run, and the branch waits to be handed over. `pushed` reads
-// the local remote-tracking branch, so it needs no network.
-function pendingHandOvers(projectDir, base, remote) {
+// The folders under openspec/changes/archive/ at `ref`.
+const archiveFolders = (projectDir, ref) => (git(projectDir, 'ls-tree', '-d', '--name-only', `${ref}:openspec/changes/archive`) ?? '')
+  .split('\n').map((name) => name.trim()).filter(Boolean);
+
+// The change archived on `branch` that lives on it, among the archives `base`
+// lacks (`onBase`), or null. It reads only the .openspec.yaml of those archives.
+function changeArchivedOn(projectDir, branch, onBase) {
+  for (const folder of archiveFolders(projectDir, branch)) {
+    const name = archivedName(folder);
+    if (!name || onBase.has(folder)) continue;
+    if (changeBranch(name, git(projectDir, 'show', `${branch}:openspec/changes/archive/${folder}/.openspec.yaml`)) === branch) return name;
+  }
+  return null;
+}
+
+// Branches not merged into `base` that hold the archive of the change living on
+// them, an archive `base` does not have yet: /close-change has run, and the
+// branch waits to be handed over. The candidates are the branches that start
+// with the fixed part of the `branch` pattern, every branch when it starts with
+// a placeholder, and change/* for changes named before the pattern. `pushed`
+// reads the local remote-tracking branch, so it needs no network.
+function pendingHandOvers(projectDir, base, remote, config) {
   if (!base) return [];
-  const branches = (git(projectDir, 'branch', '--list', 'change/*', '--no-merged', base, '--format=%(refname:short)') ?? '').split('\n').filter(Boolean);
+  const prefix = config.branch.split('{')[0];
+  const globs = prefix ? [...new Set([`${prefix}*`, 'change/*'])] : [];
+  const branches = (git(projectDir, 'branch', '--list', ...globs, '--no-merged', base, '--format=%(refname:short)') ?? '')
+    .split('\n').filter((branch) => branch && !config.protectedBranches.includes(branch));
+  const onBase = new Set(archiveFolders(projectDir, base));
   return branches.flatMap((branch) => {
-    const change = branch.slice('change/'.length);
-    const archived = (git(projectDir, 'ls-tree', '-d', '--name-only', `${branch}:openspec/changes/archive`) ?? '').split('\n');
-    if (!archived.some((name) => /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(name.trim())?.[1] === change)) return [];
+    const change = changeArchivedOn(projectDir, branch, onBase);
+    if (!change) return [];
     const pushed = Boolean(remote && git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${branch}`));
     return [{ change, branch, pushed }];
   });
@@ -199,11 +233,8 @@ export function readStatus(projectDir) {
   const active = activeChanges(projectDir);
   const changes = active
     .map((name) => {
-      const change = {
-        ...readChange(path.join(projectDir, 'openspec', 'changes', name), name),
-        current: branch === `change/${name}`,
-      };
-      return { ...change, behind: ledger ? updatesBehind(change, ledger) : {} };
+      const change = readChange(path.join(projectDir, 'openspec', 'changes', name), name);
+      return { ...change, current: branch === change.branch, behind: ledger ? updatesBehind(change, ledger) : {} };
     })
     // The change in hand comes first; the sort is stable, so the rest keep name order.
     .sort((a, b) => b.current - a.current);
@@ -212,7 +243,7 @@ export function readStatus(projectDir) {
   const base = config.protectedBranches.find((b) => git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${b}`)) ?? null;
   const remotes = (git(projectDir, 'remote') ?? '').split('\n').filter(Boolean);
   const remote = remotes.includes('origin') ? 'origin' : remotes[0] ?? null;
-  const handOvers = changes.length ? [] : pendingHandOvers(projectDir, base, remote);
+  const handOvers = changes.length ? [] : pendingHandOvers(projectDir, base, remote, config);
 
   const [state, next] = !installed ? ['not-installed', INSTALL_COMMAND]
     : strayFiles.length ? ['stray-files', null]
@@ -304,8 +335,14 @@ function changeDir(projectDir, name) {
   const changes = path.join(projectDir, 'openspec', 'changes');
   if (name !== 'archive' && existsSync(path.join(changes, name))) return path.join(changes, name);
   const archive = path.join(changes, 'archive');
-  const dated = existsSync(archive) ? readdirSync(archive).filter((d) => /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(d)?.[1] === name).sort() : [];
+  const dated = existsSync(archive) ? readdirSync(archive).filter((d) => archivedName(d) === name).sort() : [];
   return dated.length ? path.join(archive, dated.at(-1)) : null;
+}
+
+// The branch of change `name`, active or archived.
+export function branchOf(projectDir, name) {
+  const dir = changeDir(projectDir, name);
+  return changeBranch(name, dir && metadataIn(dir));
 }
 
 const remoteOf = (projectDir) => {
@@ -466,14 +503,16 @@ export function project(projectDir, { stage, name, url = '', posted = null }) {
 // Status line
 
 // The change of the current branch on one line, for Claude Code's status line:
-// `add-greeting · 2/4 · next #3`. Empty off a change branch, or when the change
-// is not active. It runs after every message, so it reads only the branch and
-// the change's own tasks.md.
+// `add-greeting · 2/4 · next #3`. Empty when no active change lives on the
+// current branch. It runs after every message, so it reads only the branch, the
+// .openspec.yaml of each active change and the tasks.md of the one it finds.
 export function readStatusLine(projectDir) {
-  const name = currentBranch(projectDir)?.match(/^change\/(.+)$/)?.[1];
-  const dir = name && path.join(projectDir, 'openspec', 'changes', name);
-  if (!dir || name === 'archive' || !existsSync(dir)) return '';
-  const change = changeProgress(name, readIfExists(path.join(dir, 'tasks.md')));
+  const branch = currentBranch(projectDir);
+  const changesDir = path.join(projectDir, 'openspec', 'changes');
+  const name = branch && activeChanges(projectDir)
+    .find((n) => changeBranch(n, metadataIn(path.join(changesDir, n))) === branch);
+  if (!name) return '';
+  const change = changeProgress(name, readIfExists(path.join(changesDir, name, 'tasks.md')));
   const progress = change.stage === 'no-tickets' ? 'no tickets' : `${change.ticketsDone}/${change.ticketsTotal}`;
   // The next command, without the change name the line starts with.
   const next = change.frontier === null ? change.next.split(' ')[0] : `#${change.frontier}`;

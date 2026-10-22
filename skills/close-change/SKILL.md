@@ -14,13 +14,13 @@ Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches
 
 ### 1. Check the change is ready
 
-The argument is the change name. Without one, run `openspec list`; with exactly one active change take it. With no active change, when `git branch --show-current` prints `change/<name>` and `<name>` is an archived change, take it. Otherwise ask which one.
+The argument is the change name. Without one, run `openspec list`; with exactly one active change take it. With no active change, run `node .claude/hooks/agent-workflow/status.mjs --json` and take the change of the `handOvers` entry whose `branch` is what `git branch --show-current` prints. Otherwise ask which one.
 
 A change is **archived** when `openspec list` does not show it and `openspec/changes/archive/<date>-<change>/` exists: OpenSpec prefixes the folder with the date of the archive. An earlier run of this skill archived it, but its hand-over did not finish.
 
 Every check below must hold. When one fails, report which and stop:
 
-- `git branch --show-current` prints `change/<change>`.
+- `git branch --show-current` prints the **change's branch**: the `x-branch` of its `.openspec.yaml` (in the archive folder for an archived change), or `change/<change>` when it has none (see **Branch** in the adapter). Every `<branch>` below is this branch.
 - `git status --porcelain` prints nothing.
 - `openspec instructions apply --change <change> --json` reports `progress.remaining` as 0. Otherwise list the unticked boxes and tell the user to run `/implement <change>#N` for the first ticket that has one; the manual test ticket counts. Skip this check for an archived change. Its `missingPrerequisites` may list `design` for a light change; that blocks nothing.
 - `openspec validate <change> --strict` says the change is valid. Skip this check for an archived change.
@@ -73,7 +73,7 @@ Summarise in a few lines: the simplification and hardening commits, the security
 
 ### 8. Hand the branch over
 
-Write the pull request for `change/<change>` into the base branch of step 2:
+Write the pull request for `<branch>` into the base branch of step 2:
 
 - **Title**: one Conventional Commits line for the whole change, `<type>(<change>): <what it does>`, taken from `proposal.md`. When the change has external references, the title ends in ` (<references>)`, separated by commas: `feat(add-greeting): greet the user by name (PROJ-123, #42)`.
 - **Body**: when `.claude/skills/pr/SKILL.md` exists, call the Skill tool with `pr` to write it. Otherwise write a short body: what the change does and why (from `proposal.md`), the capabilities the living spec gained or changed, the verification table, and the security findings left open.
@@ -88,17 +88,17 @@ Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is
 
   ```
   git switch <base branch>
-  git merge --no-ff change/<change> -m "<title>"
+  git merge --no-ff <branch> -m "<title>"
   ```
 
-- **`via` is `none`.** Give the user `git push -u <remote> change/<change>`, tell them to open a pull request from `change/<change>` into `<base branch>` in their code host, and show the title and the body, each in its own code block, ready to paste. Stop.
+- **`via` is `none`.** Give the user `git push -u <remote> <branch>`, tell them to open a pull request from `<branch>` into `<base branch>` in their code host, and show the title and the body, each in its own code block, ready to paste. Stop.
 
-- **`via` is `cli` or `mcp`.** When `allowPush` is `true`, run `git push -u <remote> change/<change>` yourself. Otherwise give the user that command. Then ask "Once the branch is pushed, shall I open the pull request with `<command's first word, or the MCP server>`?" and stop. When the user says yes:
+- **`via` is `cli` or `mcp`.** When `allowPush` is `true`, run `git push -u <remote> <branch>` yourself. Otherwise give the user that command. Then ask "Once the branch is pushed, shall I open the pull request with `<command's first word, or the MCP server>`?" and stop. When the user says yes:
 
-  1. Run `git ls-remote --heads <remote> change/<change>`. When it prints nothing, the branch is not pushed yet: ask the user to push it and stop.
+  1. Run `git ls-remote --heads <remote> <branch>`. When it prints nothing, the branch is not pushed yet: ask the user to push it and stop.
   2. Open the pull request:
-     - `cli`: take `command` and replace `{base}`, `{branch}`, `{title}` and `{body}` with the base branch, `change/<change>`, the title and the body, each quoted for the shell you run it in. For `{bodyFile}`, write the body to a temporary file outside the repository and use its path. Run the command.
-     - `mcp`: use the tool of the MCP server named in `server` that creates a pull request (or merge request), with `change/<change>` as the source, the base branch as the target, and the title and body. When that server or such a tool is not available, say so.
+     - `cli`: take `command` and replace `{base}`, `{branch}`, `{title}` and `{body}` with the base branch, `<branch>`, the title and the body, each quoted for the shell you run it in. For `{bodyFile}`, write the body to a temporary file outside the repository and use its path. Run the command.
+     - `mcp`: use the tool of the MCP server named in `server` that creates a pull request (or merge request), with `<branch>` as the source, the base branch as the target, and the title and body. When that server or such a tool is not available, say so.
   3. Show the pull request's URL. When opening it failed, show the error and fall back to the `none` case: give the title and body for the user to open it by hand.
 
 ### 9. Project the hand-over

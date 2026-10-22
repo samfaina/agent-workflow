@@ -24,9 +24,9 @@ Before any command, note what this conversation already holds:
 Run `node .claude/hooks/agent-workflow/status.mjs --json`. It prints the **progress snapshot** of the project, computed from git and the change files:
 
 - `state`: the first state of step 3 that the repository alone decides, and `next`, its command (`null` when the next step is not a command);
-- `changes`: each active change with its `stage`, `light` when it is a light change (no delta specs, one ticket), its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, and `current` when `change/<change>` is the current branch, which comes first;
+- `changes`: each active change with its `stage`, `light` when it is a light change (no delta specs, one ticket), its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, its `branch`, and `current` when that branch is the current branch, which comes first;
 - `strayFiles`: uncommitted files outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`;
-- `handOvers`: archived change branches not merged into `base`, each `pushed` or not to `remote`.
+- `handOvers`: archived changes whose `branch` is not merged into `base`, each `pushed` or not to `remote`.
 
 If `.claude/hooks/agent-workflow/status.mjs` is missing, the kit is missing or older than this skill: the state is **Not installed**.
 

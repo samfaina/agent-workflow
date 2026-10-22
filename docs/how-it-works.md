@@ -19,7 +19,7 @@ Work too small for a spec, such as a bug fix or a chore, can be a **light change
 | Stage | You type | Session | What it leaves behind |
 | --- | --- | --- | --- |
 | Interview | `/grill-with-docs <idea>` | new | new terms in `GLOSSARY.md`, decisions in `docs/adr/` |
-| Spec | `/to-spec <change>` | same as the interview | the branch `change/<change>`, with `proposal.md`, delta specs and `design.md` |
+| Spec | `/to-spec <change>` | same as the interview | the change's branch (`change/<change>` by default), with `proposal.md`, delta specs and `design.md` |
 | Tickets | `/to-tickets <change>` | new | `tasks.md` with numbered tickets |
 | Implement | `/implement <change>#N` | new, for every ticket | code and tests, ticked boxes, a commit with `Refs: <change>#N` (plus `External-Ref:` for each work item) |
 | Close | `/close-change <change>` | new | simplification and security fixes, the archived change, an updated living spec |
@@ -30,7 +30,7 @@ Work too small for a spec, such as a bug fix or a chore, can be a **light change
 
 ### Spec
 
-`/to-spec <change>` turns the interview into an OpenSpec change. It creates the branch `change/<change>`, agrees with you on the **seams** where tests will go, and writes three kinds of file: `proposal.md` (why and what, plus what is out of scope), one **delta spec** per capability (requirements with scenarios written as WHEN and THEN), and `design.md` (decisions and the test seams). It runs `openspec validate --strict` until the change is valid, then commits.
+`/to-spec <change>` turns the interview into an OpenSpec change. It creates the change's branch, named from the `branch` pattern in `.claude/agent-workflow.json` (`change/<change>` by default, see [Change branches](./what-gets-installed.md#change-branches)) and kept in the change's `x-branch`, agrees with you on the **seams** where tests will go, and writes three kinds of file: `proposal.md` (why and what, plus what is out of scope), one **delta spec** per capability (requirements with scenarios written as WHEN and THEN), and `design.md` (decisions and the test seams). It runs `openspec validate --strict` until the change is valid, then commits.
 
 ### Tickets
 
@@ -48,7 +48,7 @@ Without a number, `/implement <change>` picks the first ticket whose blockers ar
 
 ### Light changes
 
-`/light-change <description | external reference>` checks that the work adds, modifies, removes or renames no requirement of the living spec and fits one ticket, and refuses otherwise, pointing you to `/grill-with-docs`. You decide whether work is small; `/now-what` may suggest it. Once you approve a change name, a short `proposal.md` (why and what changes) and one ticket, it creates `change/<change>` and commits them in one go. The change's `.openspec.yaml` declares `skip_specs: true`, which tells OpenSpec it has no delta specs. There is no `design.md` and no manual test ticket: a check by hand is one more acceptance criterion of the ticket.
+`/light-change <description | external reference>` checks that the work adds, modifies, removes or renames no requirement of the living spec and fits one ticket, and refuses otherwise, pointing you to `/grill-with-docs`. You decide whether work is small; `/now-what` may suggest it. Once you approve a change name, a short `proposal.md` (why and what changes) and one ticket, it creates the change's branch (`change/<change>` by default) and commits them in one go. The change's `.openspec.yaml` declares `skip_specs: true`, which tells OpenSpec it has no delta specs. There is no `design.md` and no manual test ticket: a check by hand is one more acceptance criterion of the ticket.
 
 `/implement <change>` builds the ticket and `/close-change <change>` closes it. Its verification checks only that the ticket is done and that the living spec's scenarios still pass, and its archive leaves the living spec as it is. When the work turns out to need a requirement or a second ticket, Claude stops and leaves a note; `/to-spec <change>` and `/to-tickets <change>` promote it in place, keeping its name, branch and references.
 

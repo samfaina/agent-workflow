@@ -1,5 +1,6 @@
 {
   "protectedBranches": ["main", "master"],
+  "branch": "{{BRANCH}}",
   "allowPush": false,
   "checkCommand": "{{CHECK_COMMAND}}",
   "pullRequest": "{{PULL_REQUEST}}",

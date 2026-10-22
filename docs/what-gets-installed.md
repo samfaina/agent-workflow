@@ -11,7 +11,7 @@ The installer puts two kinds of things into your project. The **kit**'s own piec
 | `.claude/hooks/agent-workflow/` | The hooks and the status module (Node scripts) |
 | `.claude/settings.json` | Wires the hooks into Claude Code (merged into your settings if the file exists) |
 | `.claude/settings.local.json` | Your conversation language and, if you accept it, the status line (see [Status line](#status-line)), merged into your local settings if the file exists; added to `.gitignore` |
-| `.claude/agent-workflow.json` | Workflow configuration: protected branches, push, check command, how pull requests are opened, how progress reaches the team tracker, protected paths |
+| `.claude/agent-workflow.json` | Workflow configuration: protected branches, how change branches are named, push, check command, how pull requests are opened, how progress reaches the team tracker, protected paths |
 | `docs/agents/issue-tracker.md` | The **adapter**: how Matt's skills read and write OpenSpec |
 | `docs/agents/domain.md` | Where the skills find the glossary, ADRs and living spec |
 | `AGENTS.md`, `CLAUDE.md` | Workflow, git rules, language and specialist skills, between `agent-workflow` markers |
@@ -97,6 +97,7 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
 ```json
 {
   "protectedBranches": ["main", "master"],
+  "branch": "change/{change}",
   "allowPush": false,
   "checkCommand": "npm test",
   "pullRequest": { "via": "none" },
@@ -123,7 +124,7 @@ The hooks read the commands Claude runs and the files it edits through its edit 
 | --- | --- |
 | `node .claude/hooks/agent-workflow/status.mjs` | The roadmap of each active change, the one on the current branch first, a light change marked `(light)` |
 | `node .claude/hooks/agent-workflow/status.mjs --json` | The same snapshot as JSON, for scripts |
-| `node .claude/hooks/agent-workflow/status.mjs --statusline` | One line for the change of the current branch, for Claude Code's status line; nothing off a `change/*` branch |
+| `node .claude/hooks/agent-workflow/status.mjs --statusline` | One line for the change of the current branch, for Claude Code's status line; nothing off a change branch |
 | `node .claude/hooks/agent-workflow/status.mjs --report [<change>]` | The snapshot of a change as text to paste into a work item |
 | `node .claude/hooks/agent-workflow/status.mjs --project <stage> <change>` | Posts the snapshot to the change's work items through `tracker`; Claude runs it after each transition (see [Team tracker](#team-tracker)) |
 
@@ -142,13 +143,13 @@ The installer offers to show the change of the current branch in Claude Code's s
 "statusLine": { "type": "command", "command": "node .claude/hooks/agent-workflow/status.mjs --statusline" }
 ```
 
-| On the branch `change/<change>` | The status line shows |
+| On a change's branch | The status line shows |
 | --- | --- |
 | Tickets still open | `add-greeting · 2/4 · next #3`: tickets done, tickets in all, the frontier ticket |
 | No `tasks.md` yet | `add-greeting · no tickets · next /to-tickets` |
 | Every box ticked | `add-greeting · 4/4 · next /close-change` |
 
-Off a `change/*` branch, or once the change is archived, it prints nothing and the status line stays blank. It reads the branch and the change's `tasks.md` only, since Claude Code runs it after every message.
+Off a change branch, or once the change is archived, it prints nothing and the status line stays blank. It finds the active change whose branch (see [Change branches](#change-branches)) is the current one, reading only each active change's `.openspec.yaml` and that change's `tasks.md`, since Claude Code runs it after every message.
 
 | Where a `statusLine` already exists | The installer |
 | --- | --- |
@@ -157,6 +158,30 @@ Off a `change/*` branch, or once the change is archived, it prints nothing and t
 | `.claude/settings.json` or `.claude/settings.local.json` | Does not ask |
 
 `--yes` leaves it out, and running the installer again asks again while the project has none.
+
+## Change branches
+
+The `branch` setting in `.claude/agent-workflow.json` names the branch of each new change. It is a pattern with three placeholders:
+
+| Placeholder | Filled with |
+| --- | --- |
+| `{change}` | The change name, such as `add-greeting`. Required |
+| `{ref}` | The change's first external reference, as written, such as `PROJ-123` |
+| `{user}` | Your own value, from `git config agent-workflow.user` |
+
+The default, `change/{change}`, gives `change/add-greeting`. `feature/{ref}-{change}` gives `feature/PROJ-123-add-greeting`, which Jira links to its work item through Bitbucket. `{ref}__{change}--{user}` gives `PROJ-123__add-greeting--AB`.
+
+`agent-workflow.json` is shared by the team, so `{user}` comes from each developer's clone: `git config agent-workflow.user AB` sets it there, and it is never committed. The installer sets it when the pattern uses `{user}`, from your answer or `--user <value>`; with `--yes` and no `--user`, Claude asks for it the first time it opens a change.
+
+Claude fills the pattern in once, when the change opens, and writes the result in the change's `.openspec.yaml` as `x-branch`, next to `x-external-references`:
+
+```yaml
+x-branch: "feature/PROJ-123-add-greeting"
+```
+
+Everything that needs the change's branch reads `x-branch`: the skills, the status module, `/close-change` and the pull request. A change made before this setting has no `x-branch` and lives on `change/<change>`. A branch keeps its name: changing the pattern, or linking a work item later, renames nothing. Claude never invents a value: with `{ref}` and no external reference, it asks you for the reference or for the branch name; a name git rejects (`git check-ref-format --branch`) stops it, and it never rewrites the name to make it pass.
+
+The installer asks after **Pull requests**: `change/{change}`, `feature/{ref}-{change}` (gitflow with work items), or a pattern of your own; `--branch "<pattern>"` answers it. It rejects a pattern without `{change}`, with any other placeholder, or whose sample name git rejects. Running it again keeps the `branch` already in the file.
 
 ## Pull requests
 
@@ -168,7 +193,7 @@ The `pullRequest` setting in `.claude/agent-workflow.json` tells `/close-change`
 | `{ "via": "cli", "command": "..." }` | After you push the branch, asks whether to open the pull request, and on yes runs `command` with its placeholders filled in. |
 | `{ "via": "mcp", "server": "..." }` | The same, through the tool of that MCP server that creates pull requests (or merge requests). The server must be connected to Claude Code. |
 
-The command can use five placeholders, quoted for the shell when they are filled in: `{base}` (the protected branch), `{branch}` (`change/<change>`), `{title}`, `{body}` (the body as text) and `{bodyFile}` (the path of a temporary file holding the body). For example:
+The command can use five placeholders, quoted for the shell when they are filled in: `{base}` (the protected branch), `{branch}` (the change's branch), `{title}`, `{body}` (the body as text) and `{bodyFile}` (the path of a temporary file holding the body). For example:
 
 ```json
 "pullRequest": { "via": "cli", "command": "gh pr create --base {base} --head {branch} --title {title} --body-file {bodyFile}" }

@@ -34,6 +34,10 @@ _Avoid_: feature, proposal, epic, PRD
 A change with no delta specs and a single ticket, for work that leaves the living spec untouched.
 _Avoid_: hotfix, chore, quick fix, patch, small change
 
+**Change branch**:
+The branch a change lives on from its spec to its hand-over, named once when the change opens and kept with the change.
+_Avoid_: feature branch, work branch
+
 **User story**:
 A need described from a user's point of view, the usual starting point of a change; the spec turns each one into requirements.
 _Avoid_: feature request, requirement
