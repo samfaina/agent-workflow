@@ -187,6 +187,107 @@ describe('status of several changes', () => {
   });
 });
 
+describe('change branches', () => {
+  const META = (branch) => `schema: spec-driven\ncreated: 2026-10-22\nx-branch: "${branch}"\n`;
+
+  it('marks a change current on the branch named in its x-branch, not on change/<change>', () => {
+    const dir = installedProject({ changes: { 'add-greet': GREETING }, metadata: { 'add-greet': META('feature/POC-1-add-greet') } });
+    git(dir, 'switch', '--quiet', '-c', 'feature/POC-1-add-greet');
+    const [change] = readStatus(dir).changes;
+    assert.deepEqual([change.branch, change.current], ['feature/POC-1-add-greet', true]);
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greet');
+    assert.equal(readStatus(dir).changes[0].current, false);
+  });
+
+  it('gives each active change its own branch, change/<change> for one made before x-branch', () => {
+    const dir = installedProject({
+      changes: { 'add-greet': GREETING, 'fix-login': null, 'add-export': null },
+      metadata: { 'add-greet': META('feature/POC-1-add-greet'), 'fix-login': META('bugfix/POC-2-fix-login'), 'add-export': 'schema: spec-driven\ncreated: 2026-10-01\n' },
+    });
+    git(dir, 'switch', '--quiet', '-c', 'bugfix/POC-2-fix-login');
+    assert.deepEqual(readStatus(dir).changes.map((c) => [c.name, c.branch, c.current]), [
+      ['fix-login', 'bugfix/POC-2-fix-login', true],
+      ['add-export', 'change/add-export', false],
+      ['add-greet', 'feature/POC-1-add-greet', false],
+    ]);
+    git(dir, 'switch', '--quiet', '-c', 'change/add-export');
+    assert.deepEqual(readStatus(dir).changes.map((c) => [c.name, c.current]), [
+      ['add-export', true],
+      ['add-greet', false],
+      ['fix-login', false],
+    ]);
+  });
+
+  it('shows on the status line the change whose x-branch is the current branch', () => {
+    const dir = installedProject({
+      changes: { 'add-greet': GREETING, 'add-export': null },
+      metadata: { 'add-greet': META('feature/POC-1-add-greet') },
+    });
+    const statusLine = () => spawnSync(process.execPath, [STATUS, '--statusline'], { cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '' } }).stdout;
+    git(dir, 'switch', '--quiet', '-c', 'feature/POC-1-add-greet');
+    assert.equal(statusLine(), 'add-greet · 2/4 · next #3\n');
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greet');
+    assert.equal(statusLine(), '', 'the change lives on its x-branch only');
+    git(dir, 'switch', '--quiet', '-c', 'change/add-export');
+    assert.equal(statusLine(), 'add-export · no tickets · next /to-tickets\n', 'a change without x-branch lives on change/<change>');
+  });
+
+  // A change archived on its branch `branch`, which is not merged into main yet.
+  function archivedOn(branch, { config } = {}) {
+    const dir = installedProject({ config });
+    git(dir, 'switch', '--quiet', '-c', branch);
+    write(dir, 'openspec/changes/archive/2026-10-22-add-greet/.openspec.yaml', META(branch));
+    write(dir, 'openspec/changes/archive/2026-10-22-add-greet/tasks.md', GREETING.replace(/- \[ \]/g, '- [x]'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', 'docs(add-greet): archive change');
+    git(dir, 'switch', '--quiet', 'main');
+    return dir;
+  }
+
+  it('finds the pending hand-over of a change archived on its x-branch', () => {
+    const status = readStatus(archivedOn('feature/POC-1-add-greet', { config: { branch: 'feature/{ref}-{change}' } }));
+    assert.equal(status.state, 'hand-over-pending');
+    assert.deepEqual(status.handOvers, [{ change: 'add-greet', branch: 'feature/POC-1-add-greet', pushed: false }]);
+    assert.equal(status.next, '/close-change add-greet');
+  });
+
+  it('does not list an unmerged branch of the pattern that holds no archived change of its own', () => {
+    const dir = archivedOn('feature/POC-1-add-greet', { config: { branch: 'feature/{ref}-{change}' } });
+    git(dir, 'switch', '--quiet', '-c', 'feature/OTRA-9-foo');
+    write(dir, 'src/foo.js', 'x\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', 'feat: foo');
+    git(dir, 'switch', '--quiet', '-c', 'feature/OTRA-10-bar', 'feature/POC-1-add-greet');
+    git(dir, 'commit', '--quiet', '--allow-empty', '-m', 'chore: bar');
+    git(dir, 'switch', '--quiet', 'main');
+    assert.deepEqual(readStatus(dir).handOvers.map((h) => h.branch), ['feature/POC-1-add-greet'],
+      'neither a branch without archive nor one that only carries another branch\'s archive');
+  });
+
+  it('works with a pattern that starts with a placeholder', () => {
+    const config = { branch: '{ref}__{change}--{user}' };
+    const dir = installedProject({ config, changes: { 'add-greet': GREETING }, metadata: { 'add-greet': META('POC-1__add-greet--SF') } });
+    git(dir, 'switch', '--quiet', '-c', 'POC-1__add-greet--SF');
+    assert.equal(readStatus(dir).changes[0].current, true);
+
+    const archived = archivedOn('POC-1__add-greet--SF', { config });
+    git(archived, 'switch', '--quiet', '-c', 'unrelated');
+    git(archived, 'commit', '--quiet', '--allow-empty', '-m', 'chore: unrelated');
+    git(archived, 'switch', '--quiet', 'main');
+    assert.deepEqual(readStatus(archived).handOvers, [{ change: 'add-greet', branch: 'POC-1__add-greet--SF', pushed: false }]);
+  });
+
+  it('still finds the hand-over of a change/<change> branch after the pattern changed', () => {
+    const dir = installedProject({ config: { branch: 'feature/{ref}-{change}' } });
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greeting');
+    write(dir, 'openspec/changes/archive/2026-10-01-add-greeting/tasks.md', GREETING.replace(/- \[ \]/g, '- [x]'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', 'docs(add-greeting): archive change');
+    git(dir, 'switch', '--quiet', 'main');
+    assert.deepEqual(readStatus(dir).handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', pushed: false }]);
+  });
+});
+
 describe('states of the repository', () => {
   it('reports a project without the kit as not installed', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'aw-status-'));

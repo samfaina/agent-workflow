@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { skillsWhere } from '../../installer/catalog.mjs';
 import { sharedReferenceLinks } from '../../installer/references.mjs';
-import { frontier, isDone, parseTickets } from '../../hooks/status.mjs';
+import { branchOf, frontier, isDone, parseTickets } from '../../hooks/status.mjs';
 import { allRuns, latestRun, loadedFromProject } from './transcript.mjs';
 
 const HOOKS = ['git-guard', 'protected-paths', 'quality-gate'];
@@ -70,7 +70,8 @@ function cleanTree(report, dir) {
 
 function onChangeBranch(report, dir, change) {
   const branch = git('branch --show-current', dir);
-  report.check(`on branch change/${change}`, branch === `change/${change}`, `current branch is ${branch || '(none)'}`);
+  const expected = branchOf(dir, change);
+  report.check(`on branch ${expected}`, branch === expected, `current branch is ${branch || '(none)'}`);
 }
 
 function strictValid(report, dir, change) {
@@ -343,7 +344,7 @@ export function checkClose(dir, change) {
     report.check('close-change: did not run code-review again', !run.skills.includes('code-review'), 'code-review was called');
     report.check('close-change: showed a verification report', /Completeness/.test(run.assistantText) && /Correctness/.test(run.assistantText) && /Coherence/.test(run.assistantText), 'no Completeness / Correctness / Coherence table');
     report.check('close-change: ran openspec archive', run.commands.some((c) => c.includes(`openspec archive ${change}`)), 'no openspec archive command');
-    report.check('close-change: ended with the local merge commands (the trial has no remote)', run.assistantText.includes(`git merge --no-ff change/${change}`), 'merge command missing');
+    report.check('close-change: ended with the local merge commands (the trial has no remote)', run.assistantText.includes(`git merge --no-ff ${branchOf(dir, change)}`), 'merge command missing');
     guardrailMessages(report, run, 'close-change');
   });
   return report.items;
