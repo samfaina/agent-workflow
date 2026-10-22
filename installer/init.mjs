@@ -173,7 +173,13 @@ export async function init({
     .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
     .replace('"{{PULL_REQUEST}}"', inline(pullRequestSetting))
     .replace('"{{TRACKER}}"', inline(trackerSetting));
-  if (existsSync(workflowConfigFile)) await mergeWorkflowConfig(workflowConfigFile, JSON.parse(workflowConfig), ctx);
+  // Settings asked for or passed by flag in this run go in without a second question.
+  const answered = [
+    'checkCommand',
+    ...(pullRequest === undefined ? [] : ['pullRequest']),
+    ...(askTrackerQuestion || tracker !== undefined ? ['tracker'] : []),
+  ];
+  if (existsSync(workflowConfigFile)) await mergeWorkflowConfig(workflowConfigFile, JSON.parse(workflowConfig), { ...ctx, answered });
   else await writeFileSafely(workflowConfigFile, workflowConfig, ctx);
 
   // 6. Documents the skills read

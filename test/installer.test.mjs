@@ -381,19 +381,65 @@ describe('installer pull request setting', () => {
     assert.equal(pullRequestFollowUp(parsePullRequest('none'), '.', none), null);
   });
 
-  it('adds the setting to an existing config and keeps the user\'s values', async () => {
+  it('adds the answered settings to an existing config without confirming them, and keeps the user\'s values', async () => {
     const dir = newProject();
     const old = { protectedBranches: ['develop'], allowPush: true, checkCommand: 'pnpm test', protectedPaths: ['.env'] };
     mkdirSync(path.join(dir, '.claude'), { recursive: true });
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
-    const { io } = await install(dir, { answer: true, pullRequest: 'mcp:bitbucket' });
+    const { io } = await install(dir, { pullRequest: 'mcp:bitbucket' });
     assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, pullRequest: { via: 'mcp', server: 'bitbucket' }, tracker: { via: 'none' } });
-    assert.ok(io.questions.some((q) => q.startsWith('Add pullRequest, tracker to .claude/agent-workflow.json?')));
+    assert.ok(!io.questions.some((q) => q.startsWith('Add ')), io.questions.join(' | '));
+    assert.ok(io.logs.includes('  updated .claude/agent-workflow.json'), io.logs.join(' | '));
+  });
+
+  it('adds the answered check command and the --tracker setting to a config that lacks them without confirming them', async () => {
+    const dir = newProject();
+    const old = { protectedBranches: ['main'], allowPush: false, pullRequest: { via: 'none' }, protectedPaths: [] };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
+    const { io } = await install(dir, { tracker: 'mcp:jira' });
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, checkCommand: 'npm test', tracker: { via: 'mcp', server: 'jira' } });
+    assert.ok(!io.questions.some((q) => q.startsWith('Add ')), io.questions.join(' | '));
+  });
+
+  it('confirms the missing settings nobody was asked about, and still adds the answered ones when the user declines', async () => {
+    const dir = newProject();
+    const old = { allowPush: true, checkCommand: 'pnpm test' };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
+    const { io } = await install(dir, { pullRequest: 'github' });
+    assert.ok(io.questions.includes('Add protectedBranches, protectedPaths to .claude/agent-workflow.json? Existing settings are kept.'), io.questions.join(' | '));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, pullRequest: parsePullRequest('github'), tracker: { via: 'none' } });
+    assert.ok(io.logs.includes('  updated .claude/agent-workflow.json'), io.logs.join(' | '));
+  });
+
+  it('adds every missing setting when the user accepts, as --yes does', async () => {
+    const dir = newProject();
+    const old = { allowPush: true, checkCommand: 'pnpm test' };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
+    await install(dir, { answer: true, pullRequest: 'none', tracker: 'mcp:jira' });
+    const config = JSON.parse(read(dir, '.claude/agent-workflow.json'));
+    assert.deepEqual(Object.keys(config), ['allowPush', 'checkCommand', 'protectedBranches', 'pullRequest', 'tracker', 'protectedPaths']);
+    assert.equal(config.allowPush, true);
+    assert.equal(config.checkCommand, 'pnpm test');
+    assert.deepEqual(config.protectedBranches, ['main', 'master']);
+    assert.deepEqual(config.tracker, { via: 'mcp', server: 'jira' });
+  });
+
+  it('keeps a config whose only missing settings were declined', async () => {
+    const dir = newProject();
+    const old = { checkCommand: 'npm test', pullRequest: { via: 'none' }, tracker: { via: 'none' } };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
+    const { io } = await install(dir);
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), old);
+    assert.ok(io.logs.includes('  kept .claude/agent-workflow.json'), io.logs.join(' | '));
   });
 
   it('does not ask again when the config already has the setting', async () => {
     const dir = newProject();
-    const config = { protectedBranches: ['main'], allowPush: false, checkCommand: 'npm test', pullRequest: { via: 'mcp', server: 'gitlab' }, protectedPaths: [] };
+    const config = { protectedBranches: ['main'], allowPush: false, checkCommand: 'npm test', pullRequest: { via: 'mcp', server: 'gitlab' }, tracker: { via: 'none' }, protectedPaths: [] };
     mkdirSync(path.join(dir, '.claude'), { recursive: true });
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
     const asked = [];

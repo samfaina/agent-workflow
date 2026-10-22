@@ -95,8 +95,9 @@ export function readWorkflowConfig(file) {
 }
 
 // Adds the kit's settings missing from an existing .claude/agent-workflow.json,
-// keeping every value the user already has.
-export async function mergeWorkflowConfig(file, kitConfig, { io, projectDir }) {
+// keeping every value the user already has. The `answered` settings come from a
+// question or flag of this run, so they are added without asking again.
+export async function mergeWorkflowConfig(file, kitConfig, { io, projectDir, answered = [] }) {
   const shown = path.relative(projectDir, file).replace(/\\/g, '/');
   const current = readWorkflowConfig(file);
   if (!current) {
@@ -105,12 +106,15 @@ export async function mergeWorkflowConfig(file, kitConfig, { io, projectDir }) {
   }
   const missing = Object.keys(kitConfig).filter((key) => !(key in current));
   if (!missing.length) return 'unchanged';
-  if (!(await io.confirm(`Add ${missing.join(', ')} to ${shown}?`, true, 'Existing settings are kept.'))) {
+  const unanswered = missing.filter((key) => !answered.includes(key));
+  const addUnanswered = !unanswered.length || (await io.confirm(`Add ${unanswered.join(', ')} to ${shown}?`, true, 'Existing settings are kept.'));
+  const added = addUnanswered ? missing : missing.filter((key) => answered.includes(key));
+  if (!added.length) {
     io.log(`  kept ${shown}`);
     return 'kept';
   }
   const next = { ...current };
-  for (const key of missing) next[key] = kitConfig[key];
+  for (const key of added) next[key] = kitConfig[key];
   writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
   io.log(`  updated ${shown}`);
   return 'replaced';
