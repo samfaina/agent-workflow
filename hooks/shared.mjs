@@ -227,8 +227,11 @@ export function gitViolation({ sub, args }, branch, config) {
   return null;
 }
 
+// A placeholder of the branch pattern, such as `{change}`.
+export const BRANCH_PLACEHOLDER = /\{([^}]*)\}/g;
+
 // The branch pattern as a person reads it: `feature/{ref}-{change}` becomes `feature/<ref>-<change>`.
-const patternShown = (pattern) => pattern.replace(/\{(\w+)\}/g, '<$1>');
+const patternShown = (pattern) => pattern.replace(BRANCH_PLACEHOLDER, '<$1>');
 
 // The branch a later invocation in the same command line will run on.
 function branchAfter({ sub, args }, branch) {

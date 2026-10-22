@@ -1,11 +1,11 @@
 // How the branch of a new change is named: the `branch` setting in
 // .claude/agent-workflow.json (ADR 0012). The agent fills it in once, when the
 // change opens, and keeps the result in the change's `x-branch`.
+import { BRANCH_PLACEHOLDER, DEFAULT_CONFIG } from '../hooks/shared.mjs';
 import { shellQuote } from '../hooks/status.mjs';
 
-export const DEFAULT_BRANCH = 'change/{change}';
-const PLACEHOLDERS = ['change', 'ref', 'user'];
-// The values a pattern is checked with.
+export const DEFAULT_BRANCH = DEFAULT_CONFIG.branch;
+// The value each placeholder takes when a pattern is checked; its keys are the placeholders.
 const SAMPLE = { change: 'add-greeting', ref: 'PROJ-123', user: 'AB' };
 const USER_KEY = 'agent-workflow.user';
 
@@ -17,17 +17,15 @@ const NOTES = [
   'Example: {ref}__{change}--{user} gives PROJ-123__add-greeting--AB',
 ];
 
-const quiet = (projectDir) => ({ cwd: projectDir, quiet: true });
-
 // Why `pattern` cannot name branches, or null when it can. Git judges the
 // sample name; without git, that check is skipped.
 export function branchPatternError(pattern, { projectDir, run }) {
   if (!pattern.includes('{change}')) return `The branch pattern "${pattern}" needs {change}.`;
-  const unknown = [...pattern.matchAll(/\{([^}]*)\}/g)].map((m) => m[1]).find((name) => !PLACEHOLDERS.includes(name));
+  const unknown = [...pattern.matchAll(BRANCH_PLACEHOLDER)].map((m) => m[1]).find((name) => !Object.hasOwn(SAMPLE, name));
   if (unknown !== undefined) return `The branch pattern "${pattern}" has an unknown placeholder {${unknown}}: use {change}, {ref} and {user}.`;
-  if (run('git --version', quiet(projectDir)).status !== 0) return null;
-  const sample = pattern.replace(/\{(\w+)\}/g, (_, name) => SAMPLE[name]);
-  return run(`git check-ref-format --branch ${shellQuote(sample)}`, quiet(projectDir)).status === 0
+  if (run('git --version', { cwd: projectDir, quiet: true }).status !== 0) return null;
+  const sample = pattern.replace(BRANCH_PLACEHOLDER, (_, name) => SAMPLE[name]);
+  return run(`git check-ref-format --branch ${shellQuote(sample)}`, { cwd: projectDir, quiet: true }).status === 0
     ? null
     : `The branch pattern "${pattern}" gives ${sample}, which git rejects as a branch name.`;
 }
@@ -66,7 +64,7 @@ export async function setBranchUser(pattern, { io, projectDir, run, user }) {
   if (!pattern.includes('{user}')) return;
   let value = user?.trim();
   if (!value) {
-    if (run(`git config --get ${USER_KEY}`, quiet(projectDir)).stdout?.trim()) return;
+    if (run(`git config --get ${USER_KEY}`, { cwd: projectDir, quiet: true }).stdout?.trim()) return;
     value = (await io.ask({
       title: 'Your value for {user}',
       detail: `The branch pattern ${pattern} uses {user}. It is stored with \`git config ${USER_KEY}\`, in your clone only. Leave it empty and Claude asks for it when it opens a change.`,
@@ -74,6 +72,6 @@ export async function setBranchUser(pattern, { io, projectDir, run, user }) {
     })).trim();
     if (!value) return;
   }
-  if (run(`git config ${USER_KEY} ${shellQuote(value)}`, quiet(projectDir)).status === 0) io.log(`  set git config ${USER_KEY} to ${value}`);
+  if (run(`git config ${USER_KEY} ${shellQuote(value)}`, { cwd: projectDir, quiet: true }).status === 0) io.log(`  set git config ${USER_KEY} to ${value}`);
   else io.warn(`Could not run \`git config ${USER_KEY} ${value}\`. Run it yourself in this repository.`);
 }
