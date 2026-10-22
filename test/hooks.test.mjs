@@ -115,6 +115,22 @@ describe('git-guard command matrix', () => {
     assert.equal(verdict('git commit -m x', { branch: 'main', config }).blocked, false);
   });
 
+  it('blocks commits on every protected branch of a gitflow setup', () => {
+    const config = { protectedBranches: ['develop', 'main'], branch: 'feature/{ref}-{change}' };
+    assert.equal(verdict('git commit -m x', { branch: 'develop', config }).blocked, true);
+    assert.equal(verdict('git merge feature', { branch: 'main', config }).blocked, true);
+    assert.equal(verdict('git commit -m x', { branch: 'feature/POC-1-add-greet', config }).blocked, false);
+  });
+
+  it('names the change branch to create from the configured pattern', () => {
+    assert.equal(verdict('git commit -m x', { branch: 'main' }).reason,
+      'main is a protected branch. Create the change branch first: git switch -c change/<change>.');
+    assert.equal(verdict('git commit -m x', { branch: 'main', config: { branch: 'feature/{ref}-{change}' } }).reason,
+      'main is a protected branch. Create the change branch first: git switch -c feature/<ref>-<change>.');
+    assert.equal(verdict('git commit -m x', { branch: 'develop', config: { protectedBranches: ['develop'], branch: '{ref}__{change}--{user}' } }).reason,
+      'develop is a protected branch. Create the change branch first: git switch -c <ref>__<change>--<user>.');
+  });
+
   describe('with allowPush', () => {
     const config = { allowPush: true };
     it('allows pushing the change branch', () => {

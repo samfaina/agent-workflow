@@ -6,6 +6,8 @@ import path from 'node:path';
 
 export const DEFAULT_CONFIG = {
   protectedBranches: ['main', 'master'],
+  // How a new change's branch is named: {change}, plus {ref} and {user} when used.
+  branch: 'change/{change}',
   allowPush: false,
   checkCommand: '',
   protectedPaths: [
@@ -220,10 +222,13 @@ export function gitViolation({ sub, args }, branch, config) {
   }
 
   if (COMMIT_MAKERS.has(sub) && protectedBranch) {
-    return `${branch} is a protected branch. Create the change branch first: git switch -c change/<change>.`;
+    return `${branch} is a protected branch. Create the change branch first: git switch -c ${patternShown(config.branch)}.`;
   }
   return null;
 }
+
+// The branch pattern as a person reads it: `feature/{ref}-{change}` becomes `feature/<ref>-<change>`.
+const patternShown = (pattern) => pattern.replace(/\{(\w+)\}/g, '<$1>');
 
 // The branch a later invocation in the same command line will run on.
 function branchAfter({ sub, args }, branch) {
