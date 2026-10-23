@@ -54,16 +54,7 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
    npx github:samfaina/agent-workflow init
    ```
    `npx` downloads the kit from GitHub into npm's cache and runs it from there: you need no clone and no GitHub sign-in. The first time, it asks whether to install the package; answer `y`, or put `--yes` after `npx`. To try a branch of the kit before it reaches `main`, add `#<branch>` to the repository: `npx github:samfaina/agent-workflow#<branch> init`.
-4. Answer the questions. Each one lists numbered choices with the default marked `›`: type a number, or press Enter to take the default. The "Other…" choices ask for the text on the next line; leave it empty to go back to the list.
-   - **Language**: the language Claude talks to you in: English, Spanish or another one. The installer saves it as the `language` setting in `.claude/settings.local.json`, your personal settings for this project, which git ignores. It wins over a `language` you may have set for all projects in `~/.claude/settings.json`. Everything written to the repository stays in English.
-   - **Check command**: the command that proves the project works, such as `npm test`, `npm run lint && npm test`, `pytest` or `dotnet test`. The quality gate runs it before every commit. The installer proposes `npm test` when `package.json` has a test script; choose "None" if the project has no checks yet. You can set it later in `.claude/agent-workflow.json`.
-   - **Pull requests**: how `/close-change` opens them: GitHub (`gh`), GitLab (`glab`), Bitbucket (Atlassian's MCP server), another MCP server connected to Claude Code, a command of your own, or "None" to open them yourself in your code host. When your remote is on GitHub or GitLab and its CLI is installed, that host is the default. If the CLI is missing or you pick an MCP server, the installer adds how to install or connect it to its next steps. [What gets installed](./what-gets-installed.md#pull-requests) lists the placeholders for your own command.
-   - **Branch names**: how the branch of each new change is named: `change/{change}` (the default), `feature/{ref}__{change}` for gitflow with work items, or a pattern of your own using `{change}`, `{ref}` and `{user}`. When it uses `{user}`, the installer also asks for your value. See [Gitflow and work items in branch names](#gitflow-and-work-items-in-branch-names).
-   - **Protected branches**: the branches Claude never commits or pushes to: `main, master`, `develop, main` for gitflow, or a list of your own separated by commas. `develop, main` comes first when the repository has a `develop` branch, local or on a remote, or when you picked `feature/{ref}__{change}` for the branch names; otherwise `main, master` does.
-   - **Branch names for changes based on `<branch>`**: asked for each protected branch after the first, when there is more than one. It offers your branch names with a leading `feature/` turned into `hotfix/`, else the same pattern. Keep the same pattern everywhere and the installer writes one pattern; give another one and it writes one per base branch.
-   - **Team tracker**: how Claude posts each change's progress to the work items it references. Type `none` (the default), `mcp:<server>` for an MCP server connected to Claude Code, or a command of your own, such as `my-tracker comment {ref} --body-file {messageFile}`. The installer lists the servers in `.mcp.json` as hints, and before accepting anything but `none` it shows what a post will look like. [What gets installed](./what-gets-installed.md#team-tracker) lists the placeholders.
-   - **Optional skills**: one list with the reason for each skill. Type the numbers of the topics your project touches, separated by commas, `all`, or press Enter for none. You can run the installer again later to add more.
-   - **Status line**: whether Claude Code's status line shows where the change of the current branch stands, such as `add-greeting · 2/4 · next #3`. The default is yes. The installer saves it in `.claude/settings.local.json`, so your team does not get it. If you have a status line of your own in `~/.claude/settings.json`, it asks instead whether to use the kit's in this project only, with no as the default ([Status line](./what-gets-installed.md#status-line)).
+4. Answer the questions; [The installer's questions](#the-installer-s-questions) goes through each one.
 5. Look at what it created and commit it:
    ```powershell
    git status
@@ -79,13 +70,169 @@ You do not need to install the Skills CLI: the installer runs it with `npx`.
 
 The installer never overwrites an existing file without asking. Run it again at any time: files that already match are left alone.
 
+### The installer's questions
+
+Each question prints like this one:
+
+```
+[1/6] Language
+      The language Claude talks to you in. Everything written to the repository
+      stays in English.
+
+  › 1) English
+    2) Spanish
+    3) Other…
+
+  Choose [1]:
+```
+
+Type a number, or press Enter for the default marked `›`; a choice ending in `…` asks for the text on the next line, and an empty answer goes back to the list.
+
+- **Pull requests**, **Branch names**, **Protected branches** and **Team tracker** are skipped when `.claude/agent-workflow.json` already has their value, so the `[n/N]` count changes from one run to the next. A question whose flag you pass is skipped too.
+- **Optional skills** and **Status line** come later, among the installation steps, with `?` in place of a number. The conditional questions have no number of their own either.
+
+| Question | Default | Saved in | Flag |
+| --- | --- | --- | --- |
+| Language | English | `language` in `.claude/settings.local.json` | `--language` |
+| Check command | `npm test` when `package.json` has a test script, otherwise None | `checkCommand` in `.claude/agent-workflow.json` | `--check` |
+| Pull requests | GitHub or GitLab when `origin` points to it and its CLI is installed, otherwise None | `pullRequest` in `.claude/agent-workflow.json` | `--pull-request` |
+| Branch names | `change/{change}` | `branch` in `.claude/agent-workflow.json` | `--branch` |
+| Protected branches | `develop, main` with a `develop` branch or a gitflow pattern, otherwise `main, master` | `protectedBranches` in `.claude/agent-workflow.json` | `--protected-branches` |
+| ↳ Branch names for changes based on `<base>` | the first pattern, with a leading `feature/` turned into `hotfix/` | `branch` in `.claude/agent-workflow.json` | `--branch-for` |
+| ↳ Your value for `{user}` | empty | `git config agent-workflow.user` | `--user` |
+| Team tracker | `none` | `tracker` in `.claude/agent-workflow.json` | `--tracker` |
+| Optional skills | none | `.claude/skills/` | `--optional` |
+| Status line | yes; no when you have one of your own | `statusLine` in `.claude/settings.local.json` | none: `--yes` leaves it out |
+
+#### Language
+
+The language Claude talks to you in. Everything written to the repository stays in English.
+
+- English
+- Spanish
+- Other…: any other language
+
+**Default:** English\
+**Saved in:** `language` in `.claude/settings.local.json`, which git ignores. It wins over a `language` in `~/.claude/settings.json`.
+
+#### Check command
+
+The command that proves the project works. The quality gate runs it before every commit.
+
+- `npm test`, offered when `package.json` has a test script
+- Other command…: such as `npm run lint && npm test`, `pytest` or `dotnet test`
+- None: the project has no checks yet
+
+**Default:** `npm test` when it is offered, otherwise None\
+**Saved in:** `checkCommand` in `.claude/agent-workflow.json`, where you can change it later
+
+#### Pull requests
+
+How `/close-change` opens the pull request of a finished change. It writes the title and body either way.
+
+- GitHub: the `gh` CLI
+- GitLab: the `glab` CLI
+- Bitbucket: Atlassian's MCP server, whose name it asks for, `atlassian` by default
+- Other MCP server…: one connected to Claude Code, by its name
+- Custom command…: a command of your own, with the [placeholders](./what-gets-installed.md#pull-requests) it can use
+- None: you open them yourself in your code host
+
+When the CLI is missing or you pick an MCP server, the installer's next steps say how to install or connect it.
+
+**Default:** GitHub or GitLab when `origin` points to it and its CLI is installed, otherwise None\
+**Saved in:** `pullRequest` in `.claude/agent-workflow.json`
+
+#### Branch names
+
+How the branch of each new change is named. [Gitflow and work items in branch names](#gitflow-and-work-items-in-branch-names) explains the choices.
+
+- `change/{change}`
+- `feature/{ref}__{change}`: gitflow with work items
+- Other pattern…: your own, with the [placeholders](./what-gets-installed.md#change-branches) `{change}`, `{ref}` and `{user}`
+
+**Default:** `change/{change}`\
+**Saved in:** `branch` in `.claude/agent-workflow.json`
+
+##### Branch names for changes based on `<base>`
+
+Only asked when **Branch names** was asked and there is more than one protected branch: once for each one after the first, after **Protected branches**, or right after **Branch names** when that one is skipped. It decides how the branch of a change cut from `<base>` is named.
+
+- the first pattern, with a leading `feature/` turned into `hotfix/`
+- the first pattern unchanged, when that differs
+- Other pattern…
+
+**Default:** the first pattern, with a leading `feature/` turned into `hotfix/`\
+**Saved in:** `branch` in `.claude/agent-workflow.json`, as one pattern per base branch when the patterns differ
+
+##### Your value for `{user}`
+
+Only asked when the branch names use `{user}` and `git config agent-workflow.user` is not set yet, after the other branch questions. It is your part of each branch name, such as `SF`, typed as free text.
+
+**Default:** empty, and Claude asks for it the first time it opens a change\
+**Saved in:** `git config agent-workflow.user`, in your clone only
+
+#### Protected branches
+
+The branches Claude never commits or pushes to. Each change starts from the first of them that is a local branch.
+
+- `main, master`
+- `develop, main`: gitflow
+- Other list…: names separated by commas
+
+**Default:** `develop, main` when the repository has a `develop` branch, local or on a remote, or the branch names follow a gitflow pattern such as `feature/{ref}__{change}`; otherwise `main, master`. The default is listed first.\
+**Saved in:** `protectedBranches` in `.claude/agent-workflow.json`
+
+#### Team tracker
+
+How Claude posts each change's progress to the work items it references. You type the answer instead of picking a number:
+
+- `none`
+- `mcp:<server>`: an MCP server connected to Claude Code; the servers in `.mcp.json` are listed as hints
+- a command of your own, such as `my-tracker comment {ref} --body-file {messageFile}`, with the [placeholders](./what-gets-installed.md#team-tracker) it can use
+
+Before accepting anything but `none`, the installer shows what a post will look like and asks you to confirm it.
+
+**Default:** `none`\
+**Saved in:** `tracker` in `.claude/agent-workflow.json`
+
+#### Optional skills
+
+Which skills to install beyond the core ones. The list gives the reason for each skill, and you can pick several:
+
+- the numbers of the topics your project touches, separated by commas
+- `all`
+- Enter for none
+
+Run the installer again later to add more. [What gets installed](./what-gets-installed.md#skills) lists them all.
+
+**Default:** none\
+**Saved in:** `.claude/skills/`
+
+#### Status line
+
+Whether Claude Code's status line shows where the change of the current branch stands, such as `add-greeting · 2/4 · next #3`. Answer `y` or `n`. It is not asked when the project's settings already have a status line ([Status line](./what-gets-installed.md#status-line)).
+
+**Default:** yes\
+**Saved in:** `statusLine` in `.claude/settings.local.json`, so your team does not get it
+
+##### Use the kit's status line in this project instead of yours?
+
+Only asked when `~/.claude/settings.json` has a status line of your own, in place of the question above. Yes replaces yours in this project only; your other projects keep it.
+
+**Default:** no\
+**Saved in:** `statusLine` in `.claude/settings.local.json`
+
+Along the way, the installer may also ask yes/no questions about files it finds: whether to overwrite one, remove OpenSpec's `/opsx` files or reinstall skills you already have. See [section 3](#_3-install-the-kit-in-an-existing-project).
+
 ### Options for automation
 
 ```powershell
 npx github:samfaina/agent-workflow init --yes --language Spanish --check "npm test" --pull-request none --tracker none --optional none
 ```
 
-`--yes` accepts every default and keeps every existing file. It leaves out the status line, a personal preference. `--pull-request` takes `none`, `github`, `gitlab`, `bitbucket` (Atlassian's MCP server, named `atlassian`), `mcp:<server>`, or a command in quotes. `--branch` takes a branch pattern in quotes, `--branch-for` the pattern of another protected branch as `<base>=<pattern>` (repeat it for each one, such as `--branch-for main="hotfix/{ref}__{change}"`), and `--user` your value for `{user}`. `--protected-branches` takes branch names separated by commas, such as `develop,main`. `--tracker` takes `none`, `mcp:<server>`, or a command in quotes. `--optional` takes `all`, `none`, or skill names separated by commas.
+- `--yes` takes every default: it overwrites no existing file, though it still adds its sections and hooks to yours as [section 3](#_3-install-the-kit-in-an-existing-project) describes, and it leaves out the status line, a personal preference. A flag you pass next to it wins over the default.
+- `--branch-for` takes `<base>=<pattern>`; repeat it for each protected branch after the first, such as `--branch-for main="hotfix/{ref}__{change}"`.
+- `--pull-request` and `--tracker` take `none`, `mcp:<server>` or a command in quotes; `--pull-request` also takes `github`, `gitlab` and `bitbucket`. `--protected-branches` and `--optional` take names separated by commas, and `--optional` also takes `all` or `none`.
 
 ## 3. Install the kit in an existing project
 
