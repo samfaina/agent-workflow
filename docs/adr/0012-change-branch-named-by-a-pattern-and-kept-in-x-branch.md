@@ -13,6 +13,6 @@ Every change lived on `change/<change>`, hard-coded in the adapter, `AGENTS.md`,
 
 - OpenSpec 1.14.3 accepts `x-branch` in `validate --strict`, as it accepts `x-external-references`, and `openspec archive` keeps it, so an archived change still names its branch.
 - The agent never invents a placeholder's value. A pattern with `{ref}` and a change without a reference stops until the user gives the reference or the branch name by hand; a pattern with `{user}` and nothing in `git config agent-workflow.user` asks for it and stores it there.
-- The status module finds a pending hand-over without parsing names: among unmerged branches that start with the pattern's fixed part (all of them when it starts with a placeholder), plus `change/*`, it reads only the `.openspec.yaml` of the archives the base lacks, and matches their `x-branch` exactly.
+- The status module finds a pending hand-over without parsing names: among all unmerged branches, whatever their name, since a branch named by hand need not start with the pattern's fixed part, it reads only the `.openspec.yaml` of the archives the base lacks, and matches their `x-branch` exactly.
 - A branch is named once: linking a reference later, or changing the pattern, renames nothing.
 - ADR 0009 rejected the reference in the branch name as the *store* of external references, and that still holds: references live in `x-external-references`. A branch name that carries one is now only a naming convention. ADR 0009's claim that `#` is not valid in a branch name was wrong; it is.

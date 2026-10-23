@@ -289,6 +289,13 @@ describe('change branches', () => {
     assert.deepEqual(readStatus(archived).handOvers, [{ change: 'add-greet', branch: 'POC-1__add-greet--SF', base: 'main', pushed: false }]);
   });
 
+  it('finds the pending hand-over of a branch named by hand outside the pattern\'s fixed part', () => {
+    const status = readStatus(archivedOn('POC-1-add-greet', { config: { branch: 'feature/{ref}-{change}' } }));
+    assert.equal(status.state, 'hand-over-pending');
+    assert.deepEqual(status.handOvers, [{ change: 'add-greet', branch: 'POC-1-add-greet', base: 'main', pushed: false }]);
+    assert.equal(status.next, '/close-change add-greet');
+  });
+
   // A gitflow project, ["develop", "main"], with `fix-login` archived on change/fix-login,
   // cut from main with `x-base: main`, merged into neither.
   function archivedOnMain() {

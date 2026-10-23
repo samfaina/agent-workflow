@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { branchPatterns, currentBranch, defaultBaseIn, git, loadConfig, projectDirFor } from './shared.mjs';
+import { currentBranch, defaultBaseIn, git, loadConfig, projectDirFor } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
 // Tickets
@@ -232,17 +232,14 @@ function readArchivedOn(projectDir, { branch, base }, remote) {
 // Branches that hold the archive of the change living on them, neither merged
 // into that change's base nor with an archive the base already has:
 // /close-change has run, and the branch waits to be handed over. The candidates
-// are the branches not merged into some protected branch that exists, among
-// those that start with the fixed part of a `branch` pattern, every branch
-// when one starts with a placeholder, and change/* for changes named before the
-// pattern. A hand-over whose base exists neither locally nor on `remote` is
-// skipped. `pushed` reads the local remote-tracking branch, so it needs no network.
+// are every branch not merged into some protected branch that exists, whatever
+// its name: a branch named by hand need not follow the `branch` pattern. A
+// hand-over whose base exists neither locally nor on `remote` is skipped.
+// `pushed` reads the local remote-tracking branch, so it needs no network.
 function pendingHandOvers(projectDir, defaultBase, remote, config) {
   const refs = config.protectedBranches.map((b) => baseRef(projectDir, b, remote)).filter(Boolean);
   if (!refs.length) return [];
-  const prefixes = branchPatterns(config.branch).map((pattern) => pattern.split('{')[0]);
-  const globs = prefixes.every(Boolean) ? [...new Set([...prefixes.map((prefix) => `${prefix}*`), 'change/*'])] : [];
-  const branches = [...new Set(refs.flatMap((ref) => (git(projectDir, 'branch', '--list', ...globs, '--no-merged', ref, '--format=%(refname:short)') ?? '').split('\n')))]
+  const branches = [...new Set(refs.flatMap((ref) => (git(projectDir, 'branch', '--list', '--no-merged', ref, '--format=%(refname:short)') ?? '').split('\n')))]
     .filter((branch) => branch && !config.protectedBranches.includes(branch))
     .sort();
   const archives = new Map();
