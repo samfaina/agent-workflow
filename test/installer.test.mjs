@@ -463,6 +463,8 @@ describe('installer pull request setting', () => {
 });
 
 describe('installer branch setting', () => {
+  const writtenBranch = (dir) => JSON.parse(read(dir, '.claude/agent-workflow.json')).branch;
+
   it('stores the pattern given with --branch', async () => {
     const dir = newProject();
     const { io } = await install(dir, { pullRequest: 'none', branch: 'feature/{ref}-{change}' });
@@ -508,9 +510,70 @@ describe('installer branch setting', () => {
     const dir = newProject();
     const io = branchIO(['feature/{ticket}', 'feature/{ref}-{change}']);
     await initWith(dir, io);
-    assert.deepEqual(io.asked.filter((q) => /Pull requests|Branch names/.test(q)), ['3/5 Pull requests', '4/5 Branch names', '4/5 Branch names']);
+    assert.deepEqual(io.asked.filter((q) => /Pull requests|Branch names$/.test(q)), ['3/5 Pull requests', '4/5 Branch names', '4/5 Branch names']);
     assert.ok(io.questions.some((q) => q.startsWith('WARN The branch pattern "feature/{ticket}" needs {change}')), io.questions.join(' | '));
-    assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).branch, 'feature/{ref}-{change}');
+    assert.equal(writtenBranch(dir).develop, 'feature/{ref}-{change}');
+  });
+
+  // Records each question, answering the first branch question with `pattern`
+  // and the question of each base in `perBase` with its value, the rest with their default.
+  function perBaseIO(pattern, perBase = {}) {
+    const io = quietIO();
+    const asked = [];
+    return {
+      ...io,
+      asked,
+      async choose(question) {
+        asked.push(question);
+        if (question.title === 'Branch names') return pattern;
+        const base = question.title.match(/^Branch names for changes based on (.+)$/)?.[1];
+        const answer = base === undefined ? undefined : perBase[base];
+        return Array.isArray(answer) ? answer.shift() : answer ?? question.choices[question.selected ?? 0].value;
+      },
+    };
+  }
+  const perBaseQuestions = (io) => io.asked.filter((q) => q.title.startsWith('Branch names for'));
+
+  it('asks a pattern for each protected branch after the first, offering hotfix/ for feature/, and writes an object when they differ', async () => {
+    const dir = newProject();
+    const io = perBaseIO('feature/{ref}__{change}');
+    await initWith(dir, io, { pullRequest: 'none', protectedBranches: 'develop,main,release' });
+    assert.deepEqual(perBaseQuestions(io).map((q) => `${q.step} ${q.title}`), ['3/3 Branch names for changes based on main', '3/3 Branch names for changes based on release']);
+    assert.deepEqual(perBaseQuestions(io)[0].choices.map((c) => c.label), ['hotfix/{ref}__{change}', 'feature/{ref}__{change}', 'Other pattern…']);
+    assert.deepEqual(writtenBranch(dir), { develop: 'feature/{ref}__{change}', main: 'hotfix/{ref}__{change}', release: 'hotfix/{ref}__{change}' });
+  });
+
+  it('writes a string when every per-base answer matches the first pattern, and asks no more with one protected branch', async () => {
+    const same = newProject();
+    const io = perBaseIO('{ref}__{change}--{user}');
+    await initWith(same, io, { pullRequest: 'none', protectedBranches: 'develop,main', user: 'SF' });
+    assert.deepEqual(perBaseQuestions(io)[0].choices.map((c) => c.label), ['{ref}__{change}--{user}', 'Other pattern…']);
+    assert.equal(writtenBranch(same), '{ref}__{change}--{user}');
+    const matching = newProject();
+    await initWith(matching, perBaseIO('feature/{ref}__{change}', { main: 'feature/{ref}__{change}' }), { pullRequest: 'none', protectedBranches: 'develop,main' });
+    assert.equal(writtenBranch(matching), 'feature/{ref}__{change}');
+    const single = newProject();
+    const one = perBaseIO('feature/{ref}__{change}');
+    await initWith(single, one, { pullRequest: 'none', protectedBranches: 'main' });
+    assert.deepEqual(perBaseQuestions(one), []);
+    assert.equal(writtenBranch(single), 'feature/{ref}__{change}');
+  });
+
+  it('asks the per-base question again until the pattern is valid', async () => {
+    const dir = newProject();
+    const io = perBaseIO('feature/{ref}__{change}', { main: ['hotfix/{ref}', 'hotfix/{change}'] });
+    await initWith(dir, io, { pullRequest: 'none', protectedBranches: 'develop,main' });
+    assert.equal(perBaseQuestions(io).length, 2);
+    assert.ok(io.questions.some((q) => q.startsWith('WARN The branch pattern "hotfix/{ref}" needs {change}')), io.questions.join(' | '));
+    assert.deepEqual(writtenBranch(dir), { develop: 'feature/{ref}__{change}', main: 'hotfix/{change}' });
+  });
+
+  it('asks no per-base question when --branch is given', async () => {
+    const dir = newProject();
+    const io = perBaseIO('unused');
+    await initWith(dir, io, { pullRequest: 'none', branch: 'feature/{ref}__{change}', protectedBranches: 'develop,main' });
+    assert.deepEqual(io.asked, []);
+    assert.equal(writtenBranch(dir), 'feature/{ref}__{change}');
   });
 
   it('keeps the branch of an existing config without asking, and asks once when it is missing', async () => {
@@ -520,13 +583,43 @@ describe('installer branch setting', () => {
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
     const first = branchIO(['feature/{ref}-{change}']);
     await initWith(dir, first);
-    assert.deepEqual(first.asked, ['3/3 Branch names']);
+    assert.deepEqual(first.asked, ['3/3 Branch names', '3/3 Branch names for changes based on main']);
     assert.ok(!first.questions.some((q) => q.startsWith('Add ')), first.questions.join(' | '));
-    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...config, branch: 'feature/{ref}-{change}' });
+    const branch = { develop: 'feature/{ref}-{change}', main: 'hotfix/{ref}-{change}' };
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...config, branch });
     const again = branchIO([]);
     await initWith(dir, again);
     assert.deepEqual(again.asked, []);
-    assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).branch, 'feature/{ref}-{change}');
+    assert.deepEqual(writtenBranch(dir), branch);
+  });
+
+  it('stores a pattern per base branch given with --branch-for, without asking', async () => {
+    const dir = newProject();
+    const io = branchIO([]);
+    await initWith(dir, io, { branch: 'feature/{ref}__{change}', branchFor: ['main=hotfix/{ref}__{change}'], protectedBranches: 'develop,main', pullRequest: 'none' });
+    assert.deepEqual(io.asked, []);
+    assert.deepEqual(writtenBranch(dir), { develop: 'feature/{ref}__{change}', main: 'hotfix/{ref}__{change}' });
+    assert.match(read(dir, '.claude/agent-workflow.json'), /"branch": \{ "develop": "feature\/\{ref\}__\{change\}", "main": "hotfix\/\{ref\}__\{change\}" \},/);
+  });
+
+  it('writes a string when every --branch-for matches the other patterns', async () => {
+    const dir = newProject();
+    await initWith(dir, branchIO([]), { branch: 'change/{change}', branchFor: ['main=change/{change}'], protectedBranches: 'develop,main', pullRequest: 'none' });
+    assert.equal(writtenBranch(dir), 'change/{change}');
+  });
+
+  it('rejects a branch setting with a base outside the protected branches, with no base, or with a bad pattern, before writing anything', async () => {
+    for (const [options, reason] of [
+      [{ branchFor: ['release=release/{change}'] }, /pattern for "release", which is not a protected branch \(develop, main\)/],
+      [{ branch: {} }, /names no base branch/],
+      [{ branch: { develop: 'feature/{change}', staging: 'staging/{change}' } }, /pattern for "staging", which is not a protected branch/],
+      [{ branchFor: ['main'] }, /--branch-for takes <base>=<pattern>/],
+      [{ branchFor: ['main=hotfix/{ref}'] }, /needs \{change\}/],
+    ]) {
+      const dir = newProject();
+      await assert.rejects(initWith(dir, branchIO([]), { protectedBranches: 'develop,main', pullRequest: 'none', ...options }), reason, JSON.stringify(options));
+      assert.ok(!existsSync(path.join(dir, '.claude')), `${JSON.stringify(options)}: nothing written`);
+    }
   });
 
   const setUser = (value) => `git config agent-workflow.user ${shellQuote(value)}`;
@@ -616,9 +709,10 @@ describe('installer protected branches', () => {
     const dir = newProject();
     const io = protectedIO([]);
     await initWith(dir, io);
-    assert.deepEqual(io.asked.map((q) => `${q.step} ${q.title}`).slice(-2), ['3/4 Branch names', '4/4 Protected branches']);
+    assert.deepEqual(io.asked.map((q) => `${q.step} ${q.title}`).slice(-3), ['3/4 Branch names', '4/4 Protected branches', '4/4 Branch names for changes based on master']);
     assert.deepEqual(protectedQuestions(io)[0].choices.map((c) => c.label), ['main, master', 'develop, main', 'Other list…']);
     assert.deepEqual(written(dir), ['main', 'master']);
+    assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).branch, 'change/{change}', 'one pattern for both, written as a string');
   });
 
   it('offers develop, main first when the repository has a develop branch, local or remote-tracking', async () => {
@@ -766,7 +860,7 @@ describe('installer questions', () => {
       async ask(question) { asked.push(`${question.step} ${question.title}`); return question.fallback; },
     };
     await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', optional: 'none', nextSteps: false });
-    assert.deepEqual(asked, ['1/6 Language', '2/6 Check command', '3/6 Pull requests', '4/6 Branch names', '5/6 Protected branches', '6/6 Team tracker']);
+    assert.deepEqual(asked, ['1/6 Language', '2/6 Check command', '3/6 Pull requests', '4/6 Branch names', '5/6 Protected branches', '5/6 Branch names for changes based on master', '6/6 Team tracker']);
     const config = JSON.parse(read(dir, '.claude/agent-workflow.json'));
     assert.equal(config.checkCommand, '', 'with nothing detected, none is the default');
     assert.deepEqual(config.pullRequest, { via: 'none' });

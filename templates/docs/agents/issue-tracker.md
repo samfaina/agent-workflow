@@ -34,6 +34,8 @@ The change's branch is the first of:
 - `change/<change>`, for an existing change without `x-branch`;
 - for a new change, the name made from the `branch` pattern in `.claude/agent-workflow.json` (`change/{change}` when the key is missing): `{change}` is the change name, `{ref}` the first external reference of the change, as written, and `{user}` what `git config agent-workflow.user` prints.
 
+`branch` is one pattern, or an object of patterns keyed by base branch, such as `{"develop": "feature/{ref}__{change}", "main": "hotfix/{ref}__{change}"}`. With an object, the new change's pattern is the entry of its base; a base without an entry takes the entry of the first branch of `protectedBranches` that has one. The object is invalid when it has no key, when a key is not in `protectedBranches`, or when a value is not a pattern: say which and stop, without naming the branch.
+
 Never invent a value for a placeholder:
 
 - The pattern uses `{ref}` and the change has no external reference: stop and offer two ways on. Either the user gives the reference, which becomes the change's first external reference (see **External references**) and fills `{ref}`; or the user gives the branch name for this change by hand, checked like any other name below and then used as is.

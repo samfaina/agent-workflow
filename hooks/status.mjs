@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { currentBranch, git, loadConfig, projectDirFor } from './shared.mjs';
+import { branchPatterns, currentBranch, defaultBaseIn, git, loadConfig, projectDirFor } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
 // Tickets
@@ -233,15 +233,15 @@ function readArchivedOn(projectDir, { branch, base }, remote) {
 // into that change's base nor with an archive the base already has:
 // /close-change has run, and the branch waits to be handed over. The candidates
 // are the branches not merged into some protected branch that exists, among
-// those that start with the fixed part of the `branch` pattern, every branch
-// when it starts with a placeholder, and change/* for changes named before the
+// those that start with the fixed part of a `branch` pattern, every branch
+// when one starts with a placeholder, and change/* for changes named before the
 // pattern. A hand-over whose base exists neither locally nor on `remote` is
 // skipped. `pushed` reads the local remote-tracking branch, so it needs no network.
 function pendingHandOvers(projectDir, defaultBase, remote, config) {
   const refs = config.protectedBranches.map((b) => baseRef(projectDir, b, remote)).filter(Boolean);
   if (!refs.length) return [];
-  const prefix = config.branch.split('{')[0];
-  const globs = prefix ? [...new Set([`${prefix}*`, 'change/*'])] : [];
+  const prefixes = branchPatterns(config.branch).map((pattern) => pattern.split('{')[0]);
+  const globs = prefixes.every(Boolean) ? [...new Set([...prefixes.map((prefix) => `${prefix}*`), 'change/*'])] : [];
   const branches = [...new Set(refs.flatMap((ref) => (git(projectDir, 'branch', '--list', ...globs, '--no-merged', ref, '--format=%(refname:short)') ?? '').split('\n')))]
     .filter((branch) => branch && !config.protectedBranches.includes(branch))
     .sort();
@@ -272,7 +272,7 @@ export function readStatus(projectDir) {
   // Work items lag only behind a tracker the agent posts to.
   const ledger = (config.tracker?.via ?? 'none') === 'none' ? null : readLedger(ledgerFile(projectDir));
   // The default base: the base of a change without `x-base`.
-  const base = config.protectedBranches.find((b) => git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${b}`)) ?? null;
+  const base = defaultBaseIn(projectDir, config.protectedBranches);
   const active = activeChanges(projectDir);
   const changes = active
     .map((name) => {
