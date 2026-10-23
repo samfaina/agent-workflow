@@ -463,6 +463,8 @@ describe('installer pull request setting', () => {
 });
 
 describe('installer branch setting', () => {
+  const writtenBranch = (dir) => JSON.parse(read(dir, '.claude/agent-workflow.json')).branch;
+
   it('stores the pattern given with --branch', async () => {
     const dir = newProject();
     const { io } = await install(dir, { pullRequest: 'none', branch: 'feature/{ref}-{change}' });
@@ -590,8 +592,6 @@ describe('installer branch setting', () => {
     assert.deepEqual(again.asked, []);
     assert.deepEqual(writtenBranch(dir), branch);
   });
-
-  const writtenBranch = (dir) => JSON.parse(read(dir, '.claude/agent-workflow.json')).branch;
 
   it('stores a pattern per base branch given with --branch-for, without asking', async () => {
     const dir = newProject();

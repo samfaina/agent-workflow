@@ -189,8 +189,8 @@ const COMMIT_MAKERS = new Set(['commit', 'merge', 'rebase', 'cherry-pick', 'reve
 
 // Returns the reason a git invocation must be blocked, or null to allow it.
 // `branch` is the branch checked out when the invocation runs (null if unknown);
-// `defaultBase()` gives the default base, read only when the message needs it.
-export function gitViolation({ sub, args }, branch, config, defaultBase = () => null) {
+// `getDefaultBase()` gives the default base, read only when a commit is blocked.
+export function gitViolation({ sub, args }, branch, config, getDefaultBase = () => null) {
   const protectedBranch = branch && config.protectedBranches.includes(branch);
   const positional = args.filter((a) => !a.startsWith('-'));
 
@@ -243,7 +243,7 @@ export function gitViolation({ sub, args }, branch, config, defaultBase = () => 
   }
 
   if (COMMIT_MAKERS.has(sub) && protectedBranch) {
-    return `${branch} is a protected branch. Create the change branch first: git switch -c ${patternShown(typeof config.branch === 'string' ? config.branch : branchPatternFor(config, defaultBase()))}.`;
+    return `${branch} is a protected branch. Create the change branch first: git switch -c ${patternShown(branchPatternFor(config, getDefaultBase()))}.`;
   }
   return null;
 }

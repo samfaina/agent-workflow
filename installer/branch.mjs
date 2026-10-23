@@ -148,8 +148,9 @@ export async function askBranchPerBase(pattern, protectedBranches, { io, project
 }
 
 // A setting with {user} in a pattern needs the developer's own value, kept in
-// their clone's git config. `user` (from --user) sets it; otherwise the developer is asked
-// when it is not set yet. An empty answer leaves it for the agent to ask.
+// their clone's git config. `user` (from --user) sets it; otherwise the
+// developer is asked when it is not set yet. An empty answer leaves it for the
+// agent to ask.
 export async function setBranchUser(setting, { io, projectDir, run, user }) {
   const pattern = branchPatterns(setting).find((p) => p.includes('{user}'));
   if (pattern === undefined) return;
