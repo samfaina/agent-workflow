@@ -191,23 +191,26 @@ const isContextWork = (file) => file === 'GLOSSARY.md' || file.startsWith('docs/
 const archiveFolders = (projectDir, ref) => (git(projectDir, 'ls-tree', '-d', '--name-only', `${ref}:openspec/changes/archive`) ?? '')
   .split('\n').map((name) => name.trim()).filter(Boolean);
 
-// The change archived on `branch` that lives on it, among the archives `base`
-// lacks (`onBase`), or null. It reads only the .openspec.yaml of those archives.
-function changeArchivedOn(projectDir, branch, onBase) {
+// A file of archive folder `folder` as it is on `branch`, null when it has none.
+const showArchived = (projectDir, branch, folder, file) => git(projectDir, 'show', `${branch}:openspec/changes/archive/${folder}/${file}`);
+
+// The archive folder on `branch` of the change that lives on it, among the
+// archives `base` lacks (`onBase`), or null. It reads only the .openspec.yaml of those archives.
+function archiveOn(projectDir, branch, onBase) {
   for (const folder of archiveFolders(projectDir, branch)) {
     const name = archivedName(folder);
     if (!name || onBase.has(folder)) continue;
-    if (changeBranch(name, git(projectDir, 'show', `${branch}:openspec/changes/archive/${folder}/.openspec.yaml`)) === branch) return name;
+    if (changeBranch(name, showArchived(projectDir, branch, folder, '.openspec.yaml')) === branch) return folder;
   }
   return null;
 }
 
-// Change `name` as its latest archive is on `branch`: the base's working tree
-// has neither its tasks.md nor its .openspec.yaml until the branch is merged.
-function readArchivedOn(projectDir, branch, name) {
-  const folder = archiveFolders(projectDir, branch).filter((f) => archivedName(f) === name).sort().at(-1);
-  const show = (file) => git(projectDir, 'show', `${branch}:openspec/changes/archive/${folder}/${file}`);
-  return changeFrom(name, show('tasks.md'), show('.openspec.yaml'));
+// The change waiting on `branch` to be handed over, as it is on that branch:
+// the base's working tree has neither its tasks.md nor its .openspec.yaml until the branch is merged.
+function readArchivedOn(projectDir, branch, base) {
+  const folder = archiveOn(projectDir, branch, new Set(archiveFolders(projectDir, base)));
+  const show = (file) => showArchived(projectDir, branch, folder, file);
+  return changeFrom(archivedName(folder), show('tasks.md'), show('.openspec.yaml'));
 }
 
 // Branches not merged into `base` that hold the archive of the change living on
@@ -224,10 +227,10 @@ function pendingHandOvers(projectDir, base, remote, config) {
     .split('\n').filter((branch) => branch && !config.protectedBranches.includes(branch));
   const onBase = new Set(archiveFolders(projectDir, base));
   return branches.flatMap((branch) => {
-    const change = changeArchivedOn(projectDir, branch, onBase);
-    if (!change) return [];
+    const folder = archiveOn(projectDir, branch, onBase);
+    if (!folder) return [];
     const pushed = Boolean(remote && git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${branch}`));
-    return [{ change, branch, pushed }];
+    return [{ change: archivedName(folder), branch, pushed }];
   });
 }
 
@@ -566,7 +569,7 @@ function snapshotToPaste(projectDir, status, name) {
     : status.changes.some((c) => c.current) ? status.changes.filter((c) => c.current)
     : status.changes.length ? status.changes
     : status.handOvers.map((h) => ({
-      ...readArchivedOn(projectDir, h.branch, h.change),
+      ...readArchivedOn(projectDir, h.branch, status.base),
       handOver: h.pushed ? 'waits for its pull request' : 'waits to be handed over',
     }));
   if (name && !changes.length) return null;
