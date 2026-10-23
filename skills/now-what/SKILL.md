@@ -24,9 +24,10 @@ Before any command, note what this conversation already holds:
 Run `node .claude/hooks/agent-workflow/status.mjs --json`. It prints the **progress snapshot** of the project, computed from git and the change files:
 
 - `state`: the first state of step 3 that the repository alone decides, and `next`, its command (`null` when the next step is not a command);
-- `changes`: each active change with its `stage`, `light` when it is a light change (no delta specs, one ticket), its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, its `branch`, and `current` when that branch is the current branch, which comes first;
+- `changes`: each active change with its `stage`, `light` when it is a light change (no delta specs, one ticket), its `tickets` (each `done`, `frontier`, `ready` or `blocked`, with the blockers it `waitingOn`), its `frontier` ticket, its `next` command, its `branch`, its `base` (the branch it is handed over into), and `current` when that branch is the current branch, which comes first;
 - `strayFiles`: uncommitted files outside `openspec/changes/<change>/`, `GLOSSARY.md` and `docs/adr/`;
-- `handOvers`: archived changes whose `branch` is not merged into `base`, each `pushed` or not to `remote`.
+- `base`: the default base, the first protected branch that exists;
+- `handOvers`: archived changes whose `branch` is not merged into their own `base`, each `pushed` or not to `remote`.
 
 If `.claude/hooks/agent-workflow/status.mjs` is missing, the kit is missing or older than this skill: the state is **Not installed**.
 
@@ -43,7 +44,7 @@ Walk these states in order and stop at the first that applies. The snapshot's `s
 7. **Finished** (`finished`): every box of the change is ticked. Next: its `next`, `/close-change <change>`.
 8. **Hand-over pending** (`hand-over-pending`): take the first of `handOvers`.
    - Not `pushed`: Next: `/close-change <x>`.
-   - `pushed`: the pull request waits in the code host. Next: review and merge it there; once merged, `git switch <base>` and `git pull`.
+   - `pushed`: the pull request waits in the code host. Next: review and merge it there; once merged, `git switch <base>` and `git pull`, with the hand-over's `base`. When that `base` is not the snapshot's `base`, add that the user then brings the hand-over's `base` into the snapshot's `base`; the kit never makes that merge.
 9. **Nothing in flight** (`nothing-in-flight`). Next: `/grill-with-docs` to start a change. When the conversation describes work that adds, modifies, removes or renames no requirement of the living spec (`openspec/specs/`) and fits one ticket, such as a bug fix, a one-line change or a chore, Next: `/light-change <description or external reference>`, and Why names both conditions. When in doubt about either, recommend `/grill-with-docs`. When the conversation holds another situation, use **Map off the workflow** instead.
 
 **Several active changes** reach states 5 to 7 together: list each change of `changes` with its `stage` and `next`, and mark the one that is `current`. The user picks; this skill does not ask.

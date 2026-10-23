@@ -1,6 +1,6 @@
 // The branches the hooks keep Claude from committing and pushing to: the
-// `protectedBranches` setting in .claude/agent-workflow.json. The first one that
-// exists locally is also the base of each change.
+// `protectedBranches` setting in .claude/agent-workflow.json. Each change is cut
+// from one of them, its base; the first one that exists locally is the default.
 import { DEFAULT_CONFIG } from '../hooks/shared.mjs';
 import { GITFLOW_BRANCH, gitTakesBranchName } from './branch.mjs';
 

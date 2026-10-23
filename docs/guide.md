@@ -261,7 +261,7 @@ Every change gets its own branch, `change/<change>` by default. A team on gitflo
 "branch": "feature/{ref}-{change}"
 ```
 
-- `protectedBranches` lists the branches that receive work only through a pull request. The first one that exists is the base: changes branch off `develop` and their pull requests go back into it.
+- `protectedBranches` lists the branches that receive work only through a pull request. Each change has a base branch, one of them: by default the first one that exists, so changes branch off `develop` and their pull requests go back into it.
 - `branch` is the pattern for the name of each new change's branch. `{change}` is the change name, `{ref}` its first external reference as written, and `{user}` your own value. `feature/{ref}-{change}` gives `feature/PROJ-123-remove-todo`, which Jira picks up through Bitbucket.
 
 The installer sets both: pick `feature/{ref}-{change}` under **Branch names**, and **Protected branches** then offers `develop, main` first. It also offers it first when the repository already has a `develop` branch, local or on a remote. Without a question, pass `--branch "feature/{ref}-{change}" --protected-branches develop,main`. Running the installer again keeps the values already in the file; `agent-workflow.json` is protected, so to change them later, edit it yourself.
@@ -275,6 +275,8 @@ git config agent-workflow.user SF
 and their branches look like `PROJ-123__remove-todo--SF`. The installer runs it for you when the pattern uses `{user}`; when the value is missing, Claude asks for it the first time it opens a change.
 
 Claude names the branch once, when `/to-spec` or `/light-change` opens the change, and keeps the name in the change's `.openspec.yaml` as `x-branch`. Linking a work item later, or changing the pattern, renames no branch. When the pattern uses `{ref}` and the change has no external reference, Claude stops and asks you for the reference, or for the branch name itself. A name git rejects, such as one made from a URL, stops it too: give the reference in a shorter form, or the branch name by hand.
+
+A fix that must go out from `main` names `main` as its base when the change opens: `/light-change fix-login from main`, or say so in plain words during `/to-spec`. Claude never asks for a base; without one, the change takes the first protected branch that exists. The base must be one of `protectedBranches`, and Claude creates it from the remote when you only have `origin/main`. Claude keeps it in the change's `.openspec.yaml` as `x-base`, cuts the branch from `main`, and `/close-change` opens one pull request into `main`. Once it is merged, bring `main` into `develop` yourself: `/close-change`, `/now-what` and the roadmap remind you, and the kit never makes that merge. Release branches, and the back-merges of a release, are done outside the kit as well.
 
 ### Outside a change
 

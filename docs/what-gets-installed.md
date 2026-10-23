@@ -112,7 +112,7 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
 | `quality-gate` | Bash and PowerShell commands that contain `git commit` | the commit, when `checkCommand` fails; Claude sees the last lines of its output |
 | `protected-paths` | File edits by Claude, and Bash and PowerShell commands | edits to any path matching `protectedPaths` (`**` crosses folders; a pattern without `/` matches a file name anywhere), and commands that write, move or delete such a path: redirections (`>`, `>>`), `tee`, `cp`, `mv`, `rm`, `touch`, `sed -i`, `Set-Content`, `Add-Content`, `Out-File`, `New-Item`, `Remove-Item`, `Copy-Item`, `Move-Item` |
 
-`protectedBranches` comes from the installer's **Protected branches** question, asked after **Branch names**: `main, master`, `develop, main`, or names of your own separated by commas. `develop, main` comes first, and is what `--yes` takes, when the repository has a `develop` branch (`refs/heads/develop` or `refs/remotes/*/develop`) or the branch pattern is `feature/{ref}-{change}`; otherwise `main, master` does. `--protected-branches develop,main` answers it. The installer rejects an empty list and any name `git check-ref-format --branch` rejects. Running it again keeps the `protectedBranches` already in the file. The first protected branch that is a local branch is the base of each change.
+`protectedBranches` comes from the installer's **Protected branches** question, asked after **Branch names**: `main, master`, `develop, main`, or names of your own separated by commas. `develop, main` comes first, and is what `--yes` takes, when the repository has a `develop` branch (`refs/heads/develop` or `refs/remotes/*/develop`) or the branch pattern is `feature/{ref}-{change}`; otherwise `main, master` does. `--protected-branches develop,main` answers it. The installer rejects an empty list and any name `git check-ref-format --branch` rejects. Running it again keeps the `protectedBranches` already in the file. Each change is cut from one protected branch, its base, kept in its `.openspec.yaml` as `x-base`: the first protected branch that is a local branch, unless you name another one when the change opens.
 
 `.claude/agent-workflow.json` is itself protected, so Claude cannot loosen its own guardrails: edit it yourself. The living spec (`openspec/specs/`) is protected because only `openspec archive`, run by `/close-change`, should change it.
 
@@ -175,13 +175,14 @@ The default, `change/{change}`, gives `change/add-greeting`. `feature/{ref}-{cha
 
 `agent-workflow.json` is shared by the team, so `{user}` comes from each developer's clone: `git config agent-workflow.user AB` sets it there, and it is never committed. The installer sets it when the pattern uses `{user}`, from your answer or `--user <value>`; with `--yes` and no `--user`, Claude asks for it the first time it opens a change.
 
-Claude fills the pattern in once, when the change opens, and writes the result in the change's `.openspec.yaml` as `x-branch`, next to `x-external-references`:
+Claude fills the pattern in once, when the change opens, and writes the result in the change's `.openspec.yaml` as `x-branch`, next to its base, `x-base`, and `x-external-references`:
 
 ```yaml
 x-branch: "feature/PROJ-123-add-greeting"
+x-base: "develop"
 ```
 
-Everything that needs the change's branch reads `x-branch`: the skills, the status module, `/close-change` and the pull request. A change made before this setting has no `x-branch` and lives on `change/<change>`. A branch keeps its name: changing the pattern, or linking a work item later, renames nothing. Claude never invents a value: with `{ref}` and no external reference, it asks you for the reference or for the branch name; a name git rejects (`git check-ref-format --branch`) stops it, and it never rewrites the name to make it pass.
+Everything that needs the change's branch reads `x-branch`: the skills, the status module, `/close-change` and the pull request. A change made before this setting has no `x-branch` and lives on `change/<change>`. In the same way, `x-base` names the branch the change is cut from and handed over into; a change without it uses the first protected branch that exists. A branch keeps its name: changing the pattern, or linking a work item later, renames nothing. Claude never invents a value: with `{ref}` and no external reference, it asks you for the reference or for the branch name; a name git rejects (`git check-ref-format --branch`) stops it, and it never rewrites the name to make it pass.
 
 The installer asks after **Pull requests**: `change/{change}`, `feature/{ref}-{change}` (gitflow with work items), or a pattern of your own; `--branch "<pattern>"` answers it. It rejects a pattern without `{change}`, with any other placeholder, or whose sample name git rejects. Running it again keeps the `branch` already in the file.
 
@@ -195,7 +196,7 @@ The `pullRequest` setting in `.claude/agent-workflow.json` tells `/close-change`
 | `{ "via": "cli", "command": "..." }` | After you push the branch, asks whether to open the pull request, and on yes runs `command` with its placeholders filled in. |
 | `{ "via": "mcp", "server": "..." }` | The same, through the tool of that MCP server that creates pull requests (or merge requests). The server must be connected to Claude Code. |
 
-The command can use five placeholders, quoted for the shell when they are filled in: `{base}` (the protected branch), `{branch}` (the change's branch), `{title}`, `{body}` (the body as text) and `{bodyFile}` (the path of a temporary file holding the body). For example:
+The command can use five placeholders, quoted for the shell when they are filled in: `{base}` (the change's base branch), `{branch}` (the change's branch), `{title}`, `{body}` (the body as text) and `{bodyFile}` (the path of a temporary file holding the body). For example:
 
 ```json
 "pullRequest": { "via": "cli", "command": "gh pr create --base {base} --head {branch} --title {title} --body-file {bodyFile}" }
