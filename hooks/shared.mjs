@@ -7,6 +7,7 @@ import path from 'node:path';
 export const DEFAULT_CONFIG = {
   protectedBranches: ['main', 'master'],
   // How a new change's branch is named: {change}, plus {ref} and {user} when used.
+  // One pattern, or an object of patterns keyed by base branch (ADR 0013).
   branch: 'change/{change}',
   allowPush: false,
   checkCommand: '',
@@ -24,6 +25,25 @@ export const DEFAULT_CONFIG = {
 };
 
 export const CONFIG_FILE = path.join('.claude', 'agent-workflow.json');
+
+// The patterns of the `branch` setting: its one string, or every string value of
+// its object. A setting with none gives the default pattern.
+export function branchPatterns(branch) {
+  const patterns = typeof branch === 'string' ? [branch]
+    : branch && typeof branch === 'object' ? Object.values(branch).filter((p) => typeof p === 'string')
+    : [];
+  return patterns.length ? patterns : [DEFAULT_CONFIG.branch];
+}
+
+// The pattern a new change based on `base` is named from: the one string, else
+// the entry of `base`, else of the first protected branch that has one.
+export function branchPatternFor(config, base) {
+  const { branch } = config;
+  if (typeof branch === 'string') return branch;
+  const entries = branch && typeof branch === 'object' ? branch : {};
+  const key = [base, ...config.protectedBranches].find((b) => b && Object.hasOwn(entries, b) && typeof entries[b] === 'string');
+  return key === undefined ? branchPatterns(branch)[0] : entries[key];
+}
 
 // Missing or unreadable config falls back to the defaults, so the guards stay on.
 export function loadConfig(projectDir) {
@@ -168,8 +188,9 @@ function has(args, ...names) {
 const COMMIT_MAKERS = new Set(['commit', 'merge', 'rebase', 'cherry-pick', 'revert', 'am']);
 
 // Returns the reason a git invocation must be blocked, or null to allow it.
-// `branch` is the branch checked out when the invocation runs (null if unknown).
-export function gitViolation({ sub, args }, branch, config) {
+// `branch` is the branch checked out when the invocation runs (null if unknown);
+// `defaultBase()` gives the default base, read only when the message needs it.
+export function gitViolation({ sub, args }, branch, config, defaultBase = () => null) {
   const protectedBranch = branch && config.protectedBranches.includes(branch);
   const positional = args.filter((a) => !a.startsWith('-'));
 
@@ -222,7 +243,7 @@ export function gitViolation({ sub, args }, branch, config) {
   }
 
   if (COMMIT_MAKERS.has(sub) && protectedBranch) {
-    return `${branch} is a protected branch. Create the change branch first: git switch -c ${patternShown(config.branch)}.`;
+    return `${branch} is a protected branch. Create the change branch first: git switch -c ${patternShown(typeof config.branch === 'string' ? config.branch : branchPatternFor(config, defaultBase()))}.`;
   }
   return null;
 }
@@ -262,9 +283,15 @@ export function currentBranch(dir) {
   return git(dir, 'symbolic-ref', '--short', 'HEAD')?.trim() || null;
 }
 
+// The default base: the first of `protectedBranches` that is a local branch, null when none is.
+export function defaultBaseIn(dir, protectedBranches) {
+  return protectedBranches.find((b) => git(dir, 'rev-parse', '--verify', '--quiet', `refs/heads/${b}`)) ?? null;
+}
+
 // Checks a whole command line. `getBranch(dir)` returns the branch in a
-// directory; it is injected so tests can run without a repository.
-export function checkCommand(command, { config, cwd, getBranch = currentBranch }) {
+// directory and `getDefaultBase(dir, protectedBranches)` its default base; they
+// are injected so tests can run without a repository.
+export function checkCommand(command, { config, cwd, getBranch = currentBranch, getDefaultBase = defaultBaseIn }) {
   const branches = new Map();
   const branchIn = (dir) => {
     if (!branches.has(dir)) branches.set(dir, getBranch(dir));
@@ -274,7 +301,7 @@ export function checkCommand(command, { config, cwd, getBranch = currentBranch }
   for (const git of findGitInvocations(command)) {
     const dir = git.dir ? path.resolve(cwd, git.dir) : cwd;
     const branch = branchIn(dir);
-    const reason = gitViolation(git, branch, config);
+    const reason = gitViolation(git, branch, config, () => getDefaultBase(dir, config.protectedBranches));
     if (reason) return { blocked: true, reason, invocations };
     invocations.push(git);
     branches.set(dir, branchAfter(git, branch));

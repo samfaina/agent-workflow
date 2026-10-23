@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // agent-workflow CLI. Run it inside a project:
-//   npx github:samfaina/agent-workflow init [dir] [--yes] [--language <name>] [--check <command>] [--pull-request <how>] [--branch <pattern>] [--protected-branches <list>] [--user <value>] [--tracker <how>] [--optional all|none|a,b]
+//   npx github:samfaina/agent-workflow init [dir] [--yes] [--language <name>] [--check <command>] [--pull-request <how>] [--branch <pattern>] [--branch-for <base>=<pattern>]... [--protected-branches <list>] [--user <value>] [--tracker <how>] [--optional all|none|a,b]
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { skillsTable } from '../installer/catalog.mjs';
@@ -15,6 +15,7 @@ const { values, positionals } = parseArgs({
     check: { type: 'string' },
     'pull-request': { type: 'string' },
     branch: { type: 'string' },
+    'branch-for': { type: 'string', multiple: true },
     'protected-branches': { type: 'string' },
     user: { type: 'string' },
     tracker: { type: 'string' },
@@ -38,6 +39,9 @@ Options for init:
                        using {base} {branch} {title} {body} {bodyFile}
   --branch <pattern>   How each new change's branch is named (default: change/{change}),
                        using {change}, and optionally {ref} and {user}
+  --branch-for <base>=<pattern>
+                       The pattern for changes based on another protected branch,
+                       such as main=hotfix/{ref}__{change}; repeat it for each base
   --protected-branches <list>
                        Branches Claude never commits or pushes to, separated by commas
                        (default: develop,main when the repository has a develop branch
@@ -60,7 +64,7 @@ if (values.help || !command) {
   try {
     // The status line is a personal preference: --yes leaves it out instead of accepting it.
     const statusLine = values.yes ? false : undefined;
-    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], branch: values.branch, protectedBranches: values['protected-branches'], user: values.user, tracker: values.tracker, statusLine, optional });
+    await init({ projectDir: path.resolve(dir), io, language: values.language, checkCommand: values.check, pullRequest: values['pull-request'], branch: values.branch, branchFor: values['branch-for'], protectedBranches: values['protected-branches'], user: values.user, tracker: values.tracker, statusLine, optional });
   } catch (error) {
     console.error(`\nagent-workflow: ${error.message}`);
     process.exitCode = 1;

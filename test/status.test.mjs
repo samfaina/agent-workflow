@@ -311,6 +311,22 @@ describe('change branches', () => {
     assert.equal(status.next, '/close-change fix-login');
   });
 
+  it('finds the pending hand-over under the pattern of any base, and nothing on an unrelated branch of that pattern', () => {
+    const config = { protectedBranches: ['develop', 'main'], branch: { develop: 'feature/{ref}__{change}', main: 'hotfix/{ref}__{change}' } };
+    const dir = installedProject({ config });
+    git(dir, 'switch', '--quiet', '-c', 'develop');
+    git(dir, 'commit', '--quiet', '--allow-empty', '-m', 'feat: on develop');
+    git(dir, 'switch', '--quiet', '-c', 'hotfix/POC-1__fix-login', 'main');
+    write(dir, 'openspec/changes/archive/2026-10-22-fix-login/.openspec.yaml', 'schema: spec-driven\nx-branch: "hotfix/POC-1__fix-login"\nx-base: "main"\n');
+    write(dir, 'openspec/changes/archive/2026-10-22-fix-login/tasks.md', GREETING.replace(/- \[ \]/g, '- [x]'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', 'docs(fix-login): archive change');
+    git(dir, 'switch', '--quiet', '-c', 'hotfix/OTHER-9-foo', 'main');
+    git(dir, 'commit', '--quiet', '--allow-empty', '-m', 'fix: foo');
+    git(dir, 'switch', '--quiet', 'develop');
+    assert.deepEqual(readStatus(dir).handOvers, [{ change: 'fix-login', branch: 'hotfix/POC-1__fix-login', base: 'main', pushed: false }]);
+  });
+
   it('prints the snapshot of a hand-over based on main with --report', () => {
     const result = spawnSync(process.execPath, [STATUS, '--report'], { cwd: archivedOnMain(), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '' } });
     assert.equal(result.stdout, 'Change: fix-login\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n', result.stderr);

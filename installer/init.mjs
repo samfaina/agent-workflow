@@ -4,7 +4,8 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'no
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { askBranch, DEFAULT_BRANCH, parseBranch, setBranchUser } from './branch.mjs';
+import { branchPatterns } from '../hooks/shared.mjs';
+import { askBranch, askBranchPerBase, branchFromFlags, DEFAULT_BRANCH, parseBranch, parseBranchFor, setBranchUser } from './branch.mjs';
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
 import { addPackageScript, ensureGitignored, mergeSettings, settingsHave, writeBlockSafely, writeFileSafely, writeLanguageSetting, writeLocalSetting } from './files.mjs';
 import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
@@ -49,6 +50,7 @@ export async function init({
   checkCommand,
   pullRequest,
   branch,
+  branchFor,
   protectedBranches,
   user,
   tracker,
@@ -71,12 +73,14 @@ export async function init({
   const workflowConfigFile = path.join(claudeDir, 'agent-workflow.json');
   const existingConfig = readWorkflowConfig(workflowConfigFile) ?? {};
   const askPullRequest = pullRequest === undefined && !('pullRequest' in existingConfig);
-  const askBranchQuestion = branch === undefined && !('branch' in existingConfig);
+  const branchGiven = branch !== undefined || branchFor !== undefined;
+  const askBranchQuestion = !branchGiven && !('branch' in existingConfig);
   const askProtectedBranchesQuestion = protectedBranches === undefined && !('protectedBranches' in existingConfig);
   const askTrackerQuestion = tracker === undefined && !('tracker' in existingConfig);
   const steps = 2 + askPullRequest + askBranchQuestion + askProtectedBranchesQuestion + askTrackerQuestion;
-  // A wrong --branch or --protected-branches stops the run before anything is written.
-  const branchSetting = branch === undefined ? undefined : parseBranch(branch, { projectDir, run });
+  // A wrong --branch, --branch-for or --protected-branches stops the run before anything is written.
+  const branchFlag = typeof branch === 'string' ? parseBranch(branch, { projectDir, run }) : branch;
+  const branchForFlag = branchFor === undefined ? undefined : parseBranchFor(branchFor, { projectDir, run });
   const protectedBranchesSetting = protectedBranches === undefined ? undefined : parseProtectedBranches(protectedBranches, { projectDir, run });
   language ??= await io.choose({
     step: `1/${steps}`,
@@ -104,13 +108,18 @@ export async function init({
   const pullRequestSetting = parsePullRequest(pullRequest ?? 'none');
   const followUp = pullRequest === undefined ? null : pullRequestFollowUp(pullRequestSetting, projectDir, run);
   if (followUp?.warning) io.warn(followUp.warning);
-  const branchPattern = askBranchQuestion
-    ? await askBranch({ io, projectDir, run, step: `${3 + askPullRequest}/${steps}` })
-    : branchSetting ?? existingConfig.branch ?? DEFAULT_BRANCH;
-  await setBranchUser(branchPattern, { io, projectDir, run, user });
+  const branchStep = `${3 + askPullRequest}/${steps}`;
+  const protectedBranchesStep = `${3 + askPullRequest + askBranchQuestion}/${steps}`;
+  const firstPattern = askBranchQuestion ? await askBranch({ io, projectDir, run, step: branchStep }) : undefined;
   const protectedBranchesList = askProtectedBranchesQuestion
-    ? await askProtectedBranches({ io, projectDir, run, branchPattern, step: `${3 + askPullRequest + askBranchQuestion}/${steps}` })
+    ? await askProtectedBranches({ io, projectDir, run, branchPatterns: branchPatterns(firstPattern ?? branchFlag ?? existingConfig.branch), step: protectedBranchesStep })
     : protectedBranchesSetting ?? existingConfig.protectedBranches ?? DEFAULT_PROTECTED_BRANCHES;
+  // A pattern for each protected branch after the first, asked with the first one.
+  const branchValue = askBranchQuestion
+    ? await askBranchPerBase(firstPattern, protectedBranchesList, { io, projectDir, run, step: askProtectedBranchesQuestion ? protectedBranchesStep : branchStep })
+    : branchGiven ? branchFromFlags(branchFlag, branchForFlag, protectedBranchesList, { projectDir, run })
+    : existingConfig.branch ?? DEFAULT_BRANCH;
+  await setBranchUser(branchValue, { io, projectDir, run, user });
   const trackerSetting = askTrackerQuestion
     ? await askTracker({ io, projectDir, step: `${steps}/${steps}` })
     : parseTracker(tracker ?? 'none');
@@ -191,14 +200,14 @@ export async function init({
   const workflowConfig = template('.claude/agent-workflow.json')
     .replace('"{{PROTECTED_BRANCHES}}"', () => `[${protectedBranchesList.map((name) => JSON.stringify(name)).join(', ')}]`)
     .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
-    .replace('"{{BRANCH}}"', JSON.stringify(branchPattern))
+    .replace('"{{BRANCH}}"', () => inline(branchValue))
     .replace('"{{PULL_REQUEST}}"', inline(pullRequestSetting))
     .replace('"{{TRACKER}}"', inline(trackerSetting));
   // Settings asked for or passed by flag in this run go in without a second question.
   const answered = [
     'checkCommand',
     ...(pullRequest === undefined ? [] : ['pullRequest']),
-    ...(askBranchQuestion || branch !== undefined ? ['branch'] : []),
+    ...(askBranchQuestion || branchGiven ? ['branch'] : []),
     ...(askProtectedBranchesQuestion || protectedBranches !== undefined ? ['protectedBranches'] : []),
     ...(askTrackerQuestion || tracker !== undefined ? ['tracker'] : []),
   ];

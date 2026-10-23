@@ -131,6 +131,20 @@ describe('git-guard command matrix', () => {
       'develop is a protected branch. Create the change branch first: git switch -c <ref>__<change>--<user>.');
   });
 
+  it('names the pattern of the default base when the patterns differ per base branch', () => {
+    const config = { ...DEFAULT_CONFIG, protectedBranches: ['develop', 'main'], branch: { develop: 'feature/{ref}__{change}', main: 'hotfix/{ref}__{change}' } };
+    const reason = (defaultBase, branch = config.branch) => checkCommand('git commit -m x', {
+      config: { ...config, branch }, cwd: process.cwd(), getBranch: () => 'main', getDefaultBase: () => defaultBase,
+    }).reason;
+    assert.equal(reason('develop'), 'main is a protected branch. Create the change branch first: git switch -c feature/<ref>__<change>.');
+    assert.equal(reason('main'), 'main is a protected branch. Create the change branch first: git switch -c hotfix/<ref>__<change>.',
+      'without develop, main is the default base');
+    assert.equal(reason('develop', { main: 'hotfix/{ref}__{change}' }), 'main is a protected branch. Create the change branch first: git switch -c hotfix/<ref>__<change>.',
+      'a base without an entry takes the first protected branch that has one');
+    assert.equal(reason(null), 'main is a protected branch. Create the change branch first: git switch -c feature/<ref>__<change>.',
+      'with no protected branch yet, the first one that has an entry');
+  });
+
   describe('with allowPush', () => {
     const config = { allowPush: true };
     it('allows pushing the change branch', () => {

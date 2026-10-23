@@ -184,7 +184,16 @@ x-base: "develop"
 
 Everything that needs the change's branch reads `x-branch`: the skills, the status module, `/close-change` and the pull request. A change made before this setting has no `x-branch` and lives on `change/<change>`. In the same way, `x-base` names the branch the change is cut from and handed over into; a change without it uses the first protected branch that exists. A branch keeps its name: changing the pattern, or linking a work item later, renames nothing. Claude never invents a value: with `{ref}` and no external reference, it asks you for the reference or for the branch name; a name git rejects (`git check-ref-format --branch`) stops it, and it never rewrites the name to make it pass.
 
-The installer asks after **Pull requests**: `change/{change}`, `feature/{ref}-{change}` (gitflow with work items), or a pattern of your own; `--branch "<pattern>"` answers it. It rejects a pattern without `{change}`, with any other placeholder, or whose sample name git rejects. Running it again keeps the `branch` already in the file.
+A team whose changes branch off more than one protected branch can give each base its own pattern: `branch` then takes an object keyed by base branch.
+
+```json
+"protectedBranches": ["develop", "main"],
+"branch": { "develop": "feature/{ref}__{change}", "main": "hotfix/{ref}__{change}" }
+```
+
+A change based on `main` with the reference `POC-1` gets `hotfix/POC-1__fix-login`; one based on `develop` gets `feature/POC-1__add-greet`. A base without an entry takes the entry of the first protected branch that has one. Every key must be one of `protectedBranches`, and the object needs at least one; Claude stops when it meets an object that breaks either rule. The status module looks for pending hand-overs under the fixed part of every pattern, and the `git-guard` message shows the pattern of the default base.
+
+The installer asks after **Pull requests**: `change/{change}`, `feature/{ref}-{change}` (gitflow with work items), or a pattern of your own; `--branch "<pattern>"` answers it. It rejects a pattern without `{change}`, with any other placeholder, or whose sample name git rejects. When **Protected branches** lists more than one branch, it then asks **Branch names for changes based on `<branch>`** for each one after the first, offering the first pattern with a leading `feature/` turned into `hotfix/`, else the same pattern. It writes an object only when the patterns differ, a string otherwise. Without a question, `--branch-for <base>=<pattern>`, repeated for each base, gives the pattern of another protected branch next to `--branch`, and the installer rejects a base outside the protected branches; with `--branch` or `--branch-for`, it asks no branch question. `--yes` writes `change/{change}` as a string. Running it again keeps the `branch` already in the file.
 
 ## Pull requests
 
