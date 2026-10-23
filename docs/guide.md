@@ -233,7 +233,7 @@ Tickets done: 2 of 4
 Work items: PROJ-123
 ```
 
-On a change branch it prints that change; elsewhere, every change in flight, or the one you name with `--report remove-todo`. It holds only the name, the stage, the tickets done and the references: nothing from the spec or the tickets leaves the repository.
+On a change branch it prints that change; elsewhere, every change in flight, or the one you name with `--report remove-todo`. With no change in flight, it prints each change that is archived on its branch and waits to be handed over, with `Stage: finished, waits for its pull request` once the branch is pushed. It holds only the name, the stage, the tickets done and the references: nothing from the spec or the tickets leaves the repository.
 
 ### Post progress to the work items
 
