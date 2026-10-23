@@ -1,5 +1,5 @@
 {
-  "protectedBranches": ["main", "master"],
+  "protectedBranches": "{{PROTECTED_BRANCHES}}",
   "branch": "{{BRANCH}}",
   "allowPush": false,
   "checkCommand": "{{CHECK_COMMAND}}",

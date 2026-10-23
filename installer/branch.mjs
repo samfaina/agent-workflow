@@ -5,6 +5,7 @@ import { BRANCH_PLACEHOLDER, DEFAULT_CONFIG } from '../hooks/shared.mjs';
 import { shellQuote } from '../hooks/status.mjs';
 
 export const DEFAULT_BRANCH = DEFAULT_CONFIG.branch;
+export const GITFLOW_BRANCH = 'feature/{ref}-{change}';
 // The value each placeholder takes when a pattern is checked; its keys are the placeholders.
 const SAMPLE = { change: 'add-greeting', ref: 'PROJ-123', user: 'AB' };
 const USER_KEY = 'agent-workflow.user';
@@ -23,11 +24,16 @@ export function branchPatternError(pattern, { projectDir, run }) {
   if (!pattern.includes('{change}')) return `The branch pattern "${pattern}" needs {change}.`;
   const unknown = [...pattern.matchAll(BRANCH_PLACEHOLDER)].map((m) => m[1]).find((name) => !Object.hasOwn(SAMPLE, name));
   if (unknown !== undefined) return `The branch pattern "${pattern}" has an unknown placeholder {${unknown}}: use {change}, {ref} and {user}.`;
-  if (run('git --version', { cwd: projectDir, quiet: true }).status !== 0) return null;
   const sample = pattern.replace(BRANCH_PLACEHOLDER, (_, name) => SAMPLE[name]);
-  return run(`git check-ref-format --branch ${shellQuote(sample)}`, { cwd: projectDir, quiet: true }).status === 0
+  return gitTakesBranchName(sample, { projectDir, run })
     ? null
     : `The branch pattern "${pattern}" gives ${sample}, which git rejects as a branch name.`;
+}
+
+// Whether git takes `name` as a branch name; true without git, which cannot judge it.
+export function gitTakesBranchName(name, { projectDir, run }) {
+  if (run('git --version', { cwd: projectDir, quiet: true }).status !== 0) return true;
+  return run(`git check-ref-format --branch ${shellQuote(name)}`, { cwd: projectDir, quiet: true }).status === 0;
 }
 
 // The setting from --branch: the pattern when it is valid; throws otherwise.
@@ -47,7 +53,7 @@ export async function askBranch({ io, projectDir, run, step }) {
       detail: 'How the branch of each new change is named. Each change keeps the name it got, so changing this later renames no branch.',
       choices: [
         { label: DEFAULT_BRANCH, note: 'default', value: DEFAULT_BRANCH },
-        { label: 'feature/{ref}-{change}', note: 'gitflow + work item', value: 'feature/{ref}-{change}' },
+        { label: GITFLOW_BRANCH, note: 'gitflow + work item', value: GITFLOW_BRANCH },
         { label: 'Other pattern…', input: { label: 'Pattern', lines: NOTES } },
       ],
     });

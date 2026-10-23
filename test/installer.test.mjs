@@ -18,7 +18,7 @@ const KIT_HOOKS = JSON.parse(readFileSync(new URL('../templates/.claude/settings
 const STOCK_CONFIG ='schema: spec-driven\n\n# Project context (optional)\n#   context: |\n';
 
 // Simulates the Skills CLI, OpenSpec and git config so the installer runs
-// offline; git itself judges branch names. `gitUser` is the clone's
+// offline; git itself judges branch names and lists branches. `gitUser` is the clone's
 // agent-workflow.user, empty when unset.
 function fakeTools(projectDir, { gitUser = '' } = {}) {
   const commands = [];
@@ -26,6 +26,7 @@ function fakeTools(projectDir, { gitUser = '' } = {}) {
     commands.push(command);
     if (command.endsWith('--version')) return { status: 0, stdout: '1.14.3' };
     if (command.startsWith('git check-ref-format ')) return defaultRun(command, { cwd: projectDir, quiet: true });
+    if (command.startsWith('git for-each-ref ')) return defaultRun(command, { cwd: projectDir, quiet: true });
     if (command === 'git config --get agent-workflow.user') return { status: gitUser ? 0 : 1, stdout: gitUser ? `${gitUser}\n` : '' };
     if (command.startsWith('git config agent-workflow.user ')) return { status: 0, stdout: '' };
     if (command.includes(' init --tools none')) {
@@ -77,7 +78,7 @@ function quietIO(answer = false) {
 }
 
 // `homeDir` stands in for the user's home, so the real ~/.claude/settings.json is never read.
-async function install(projectDir, { answer = false, optional = 'none', pullRequest, branch, user, tracker, statusLine, homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-')), initFrom = init } = {}) {
+async function install(projectDir, { answer = false, optional = 'none', pullRequest, branch, protectedBranches, user, tracker, statusLine, homeDir = mkdtempSync(path.join(tmpdir(), 'aw-home-')), initFrom = init } = {}) {
   const tools = fakeTools(projectDir);
   const io = quietIO(answer);
   await initFrom({
@@ -89,6 +90,7 @@ async function install(projectDir, { answer = false, optional = 'none', pullRequ
     checkCommand: 'npm test',
     pullRequest,
     branch,
+    protectedBranches,
     user,
     tracker,
     statusLine,
@@ -416,8 +418,8 @@ describe('installer pull request setting', () => {
     mkdirSync(path.join(dir, '.claude'), { recursive: true });
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
     const { io } = await install(dir, { pullRequest: 'github' });
-    assert.ok(io.questions.includes('Add protectedBranches, protectedPaths to .claude/agent-workflow.json? Existing settings are kept.'), io.questions.join(' | '));
-    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, pullRequest: parsePullRequest('github'), tracker: { via: 'none' }, branch: 'change/{change}' });
+    assert.ok(io.questions.includes('Add protectedPaths to .claude/agent-workflow.json? Existing settings are kept.'), io.questions.join(' | '));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...old, protectedBranches: ['main', 'master'], pullRequest: parsePullRequest('github'), tracker: { via: 'none' }, branch: 'change/{change}' });
     assert.ok(io.logs.includes('  updated .claude/agent-workflow.json'), io.logs.join(' | '));
   });
 
@@ -437,7 +439,7 @@ describe('installer pull request setting', () => {
 
   it('keeps a config whose only missing settings were declined', async () => {
     const dir = newProject();
-    const old = { checkCommand: 'npm test', pullRequest: { via: 'none' }, tracker: { via: 'none' }, branch: 'change/{change}' };
+    const old = { checkCommand: 'npm test', protectedBranches: ['main'], pullRequest: { via: 'none' }, tracker: { via: 'none' }, branch: 'change/{change}' };
     mkdirSync(path.join(dir, '.claude'), { recursive: true });
     writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(old));
     const { io } = await install(dir);
@@ -506,7 +508,7 @@ describe('installer branch setting', () => {
     const dir = newProject();
     const io = branchIO(['feature/{ticket}', 'feature/{ref}-{change}']);
     await initWith(dir, io);
-    assert.deepEqual(io.asked.filter((q) => /Pull requests|Branch names/.test(q)), ['3/4 Pull requests', '4/4 Branch names', '4/4 Branch names']);
+    assert.deepEqual(io.asked.filter((q) => /Pull requests|Branch names/.test(q)), ['3/5 Pull requests', '4/5 Branch names', '4/5 Branch names']);
     assert.ok(io.questions.some((q) => q.startsWith('WARN The branch pattern "feature/{ticket}" needs {change}')), io.questions.join(' | '));
     assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).branch, 'feature/{ref}-{change}');
   });
@@ -556,6 +558,115 @@ describe('installer branch setting', () => {
     const unused = await initWith(newProject(), none, { user: 'SF' });
     assert.ok(!none.asked.includes('Your value for {user}'));
     assert.ok(!unused.some((c) => c.startsWith('git config agent-workflow.user ')), unused.join(' | '));
+  });
+});
+
+describe('installer protected branches', () => {
+  it('stores the branches given with --protected-branches without asking', async () => {
+    const dir = newProject();
+    const { io } = await install(dir, { pullRequest: 'none', protectedBranches: ' develop , main ,' });
+    assert.equal(read(dir, '.claude/agent-workflow.json').match(/"protectedBranches": .*/)[0], '"protectedBranches": ["develop", "main"],');
+    assert.ok(!io.questions.some((q) => q.startsWith('Add ')), io.questions.join(' | '));
+  });
+
+  it('rejects an empty --protected-branches, or a name git rejects, before writing anything', async () => {
+    for (const [list, reason] of [
+      ['', /at least one/],
+      [' , ', /at least one/],
+      ['main, bad name', /"bad name", which git rejects/],
+    ]) {
+      const dir = newProject();
+      await assert.rejects(install(dir, { pullRequest: 'none', protectedBranches: list }), reason, list);
+      assert.ok(!existsSync(path.join(dir, '.claude')), `${list}: nothing written`);
+    }
+  });
+
+  // Answers the protected branches question with `answers` in turn, and records each question.
+  function protectedIO(answers) {
+    const io = quietIO();
+    const asked = [];
+    return {
+      ...io,
+      asked,
+      async choose(question) {
+        asked.push(question);
+        const selected = question.choices[question.selected ?? 0].value;
+        return question.title === 'Protected branches' && answers.length ? answers.shift() : selected;
+      },
+    };
+  }
+
+  const initWith = (dir, io, options = {}) => init({
+    projectDir: dir, io, run: fakeTools(dir).run, fetchText: async () => '', language: 'English', checkCommand: 'npm test', pullRequest: 'none', tracker: 'none', optional: 'none', nextSteps: false, ...options,
+  });
+  const protectedQuestions = (io) => io.asked.filter((q) => q.title === 'Protected branches');
+  const written = (dir) => JSON.parse(read(dir, '.claude/agent-workflow.json')).protectedBranches;
+
+  // A real repository with one commit, and `refs` pointing at it.
+  function gitProject(refs) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'aw-git-'));
+    const git = (...args) => assert.equal(spawnSync('git', args, { cwd: dir }).status, 0, args.join(' '));
+    git('init', '-q');
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'start');
+    for (const ref of refs) git('update-ref', ref, 'HEAD');
+    return dir;
+  }
+
+  it('asks after the branch names, with main, master first and taken under --yes', async () => {
+    const dir = newProject();
+    const io = protectedIO([]);
+    await initWith(dir, io);
+    assert.deepEqual(io.asked.map((q) => `${q.step} ${q.title}`).slice(-2), ['3/4 Branch names', '4/4 Protected branches']);
+    assert.deepEqual(protectedQuestions(io)[0].choices.map((c) => c.label), ['main, master', 'develop, main', 'Other list…']);
+    assert.deepEqual(written(dir), ['main', 'master']);
+  });
+
+  it('offers develop, main first when the repository has a develop branch, local or remote-tracking', async () => {
+    for (const refs of [['refs/heads/develop'], ['refs/remotes/origin/develop']]) {
+      const dir = gitProject(refs);
+      const io = protectedIO([]);
+      await initWith(dir, io, { branch: 'change/{change}' });
+      assert.equal(protectedQuestions(io)[0].choices[0].label, 'develop, main', refs[0]);
+      assert.deepEqual(written(dir), ['develop', 'main'], refs[0]);
+    }
+    const other = gitProject(['refs/heads/developer', 'refs/remotes/origin/feature/develop']);
+    const io = protectedIO([]);
+    await initWith(other, io, { branch: 'change/{change}' });
+    assert.equal(protectedQuestions(io)[0].choices[0].label, 'main, master');
+  });
+
+  it('offers develop, main first when the gitflow branch pattern is chosen in the same run', async () => {
+    const dir = newProject();
+    const io = protectedIO([]);
+    await initWith(dir, { ...io, async choose(question) { return question.title === 'Branch names' ? 'feature/{ref}-{change}' : io.choose(question); } });
+    assert.equal(protectedQuestions(io)[0].choices[0].label, 'develop, main');
+    assert.deepEqual(written(dir), ['develop', 'main']);
+  });
+
+  it('asks again until the list is valid', async () => {
+    const dir = newProject();
+    const io = protectedIO([' , ', 'main, bad name', 'trunk, release ']);
+    await initWith(dir, io, { branch: 'change/{change}' });
+    assert.equal(protectedQuestions(io).length, 3);
+    assert.ok(io.questions.some((q) => q.startsWith('WARN Name at least one protected branch')), io.questions.join(' | '));
+    assert.ok(io.questions.some((q) => q.startsWith('WARN The protected branches name "bad name"')), io.questions.join(' | '));
+    assert.deepEqual(written(dir), ['trunk', 'release']);
+  });
+
+  it('keeps the protected branches of an existing config without asking, and asks once when they are missing', async () => {
+    const dir = newProject();
+    const config = { branch: 'change/{change}', allowPush: false, checkCommand: 'npm test', pullRequest: { via: 'none' }, tracker: { via: 'none' }, protectedPaths: [] };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
+    const first = protectedIO(['develop, main']);
+    await initWith(dir, first, { pullRequest: undefined, tracker: undefined });
+    assert.deepEqual(first.asked.map((q) => `${q.step} ${q.title}`), ['3/3 Protected branches']);
+    assert.ok(!first.questions.some((q) => q.startsWith('Add ')), first.questions.join(' | '));
+    assert.deepEqual(JSON.parse(read(dir, '.claude/agent-workflow.json')), { ...config, protectedBranches: ['develop', 'main'] });
+    const again = protectedIO([]);
+    await initWith(dir, again, { pullRequest: undefined, tracker: undefined });
+    assert.deepEqual(again.asked, []);
+    assert.deepEqual(written(dir), ['develop', 'main']);
   });
 });
 
@@ -641,7 +752,7 @@ describe('installer tracker setting', () => {
 });
 
 describe('installer questions', () => {
-  it('asks the five questions as numbered steps and stores the answers', async () => {
+  it('asks the six questions as numbered steps and stores the answers', async () => {
     const dir = newProject();
     const tools = fakeTools(dir);
     const asked = [];
@@ -651,11 +762,12 @@ describe('installer questions', () => {
       async ask(question) { asked.push(`${question.step} ${question.title}`); return question.fallback; },
     };
     await init({ projectDir: dir, io, run: tools.run, fetchText: async () => '', optional: 'none', nextSteps: false });
-    assert.deepEqual(asked, ['1/5 Language', '2/5 Check command', '3/5 Pull requests', '4/5 Branch names', '5/5 Team tracker']);
+    assert.deepEqual(asked, ['1/6 Language', '2/6 Check command', '3/6 Pull requests', '4/6 Branch names', '5/6 Protected branches', '6/6 Team tracker']);
     const config = JSON.parse(read(dir, '.claude/agent-workflow.json'));
     assert.equal(config.checkCommand, '', 'with nothing detected, none is the default');
     assert.deepEqual(config.pullRequest, { via: 'none' });
     assert.equal(config.branch, 'change/{change}');
+    assert.deepEqual(config.protectedBranches, ['main', 'master']);
     assert.deepEqual(config.tracker, { via: 'none' });
     assert.equal(JSON.parse(read(dir, '.claude/settings.local.json')).language, 'english');
   });
