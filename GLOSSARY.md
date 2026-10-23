@@ -38,6 +38,10 @@ _Avoid_: hotfix, chore, quick fix, patch, small change
 The branch a change lives on from its spec to its hand-over, named once when the change opens and kept with the change.
 _Avoid_: feature branch, work branch
 
+**Base branch**:
+The protected branch a change is cut from and handed over into, chosen once when the change opens.
+_Avoid_: target branch, parent branch, trunk
+
 **User story**:
 A need described from a user's point of view, the usual starting point of a change; the spec turns each one into requirements.
 _Avoid_: feature request, requirement
