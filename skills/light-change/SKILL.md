@@ -16,7 +16,7 @@ Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches
 
 The argument is a description of the work, an external reference (`PROJ-123`, `#42`, a URL), or both. With an external reference, read the work item as **Starting from a work item** in the adapter says, and keep the reference. With neither, ask the user what the work is.
 
-The argument may also name the change's **base branch**, such as `/light-change fix-login from main`: keep it for **Branch** in the adapter, which checks it. Without one, the base is the default base; do not ask for it.
+The argument may also name the change's **base branch**, such as `/light-change fix-login from main`: check it now as **Branch** in the adapter says (a protected branch that exists locally or on the remote), and stop when it fails. Without one, the base is the default base; do not ask for it.
 
 Ask only what you need to write the ticket, one question at a time.
 

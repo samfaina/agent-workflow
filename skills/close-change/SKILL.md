@@ -31,7 +31,7 @@ Read the change's **external references**: the list `x-external-references` in `
 
 ### 2. Pin the diff
 
-Find the **base branch**: the `x-base` of the change's `.openspec.yaml` (in the archive folder for an archived change), or, when it has none, the first branch of `protectedBranches` in `.claude/agent-workflow.json` that exists locally (see **Branch** in the adapter). Read it from the local branch, or from `<remote>/<base>` when it is not a local branch. The change's diff is `git diff <base>...HEAD`; its files are `git diff --name-only <base>...HEAD`. The **code files** are those outside `openspec/`, `docs/` and `.claude/`. With no code files, skip to step 5.
+Find the **base branch**: the `x-base` of the change's `.openspec.yaml` (in the archive folder for an archived change), or, when it has none, the first branch of `protectedBranches` in `.claude/agent-workflow.json` that exists locally (see **Branch** in the adapter). In the diff below, `<base>` is the local branch, or `<remote>/<base branch>` when it is not a local branch; everywhere else, the base branch is its bare name, such as `main`. The change's diff is `git diff <base>...HEAD`; its files are `git diff --name-only <base>...HEAD`. The **code files** are those outside `openspec/`, `docs/` and `.claude/`. With no code files, skip to step 5.
 
 ### 3. Simplify
 
@@ -82,6 +82,8 @@ Write the pull request for `<branch>` into the base branch of step 2:
 
 When resuming an archived change, find the base branch as step 2 does, from the archived `.openspec.yaml`. Read `proposal.md` and `.openspec.yaml` from `openspec/changes/archive/<date>-<change>/`; the capabilities are the folder names under its `specs/`. The verification table and the security findings belong to the earlier run, so the body leaves them out, whether `pr` writes it or you do.
 
+There is one pull request, or one local merge, into the base branch. When the base branch is not the default base (the first protected branch that exists locally), every case below ends its message, before it stops, by telling the user to bring `<base branch>` into the default base once the pull request is merged, or once they merged locally. Never make that merge yourself.
+
 Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is `{ "via": "none" }`. Run `git remote`: the remote is `origin` when it is listed, otherwise the first one listed. Then follow the first case that applies:
 
 - **No remote.** Give the user the commands to merge the change themselves, and stop:
@@ -100,8 +102,6 @@ Read `pullRequest` from `.claude/agent-workflow.json`; when it is missing, it is
      - `cli`: take `command` and replace `{base}`, `{branch}`, `{title}` and `{body}` with the base branch, `<branch>`, the title and the body, each quoted for the shell you run it in. For `{bodyFile}`, write the body to a temporary file outside the repository and use its path. Run the command.
      - `mcp`: use the tool of the MCP server named in `server` that creates a pull request (or merge request), with `<branch>` as the source, the base branch as the target, and the title and body. When that server or such a tool is not available, say so.
   3. Show the pull request's URL. When opening it failed, show the error and fall back to the `none` case: give the title and body for the user to open it by hand.
-
-There is one pull request, or one local merge, into the base branch. When the base branch is not the default base (the first protected branch that exists locally), end the final message by telling the user to bring `<base branch>` into the default base once the pull request is merged, or once they merged locally. Never make that merge yourself.
 
 ### 9. Project the hand-over
 

@@ -122,21 +122,21 @@ export function parseExternalReferences(yaml) {
   return references.filter(Boolean);
 }
 
+// The scalar value of top-level key `key` in a .openspec.yaml, '' when it is missing.
+function topLevelScalar(yaml, key) {
+  const line = (yaml ?? '').replace(/\r\n/g, '\n').match(new RegExp(`^${key}:[ \\t]*(.*)$`, 'm'));
+  return line ? yamlScalar(line[1]) : '';
+}
+
 // The branch a change lives on: the top-level `x-branch` of its .openspec.yaml,
 // written once when the change opens (ADR 0012). A change made before that key
 // existed lives on `change/<change>`. A branch name is never parsed back into a change.
-export function changeBranch(name, yaml) {
-  const line = (yaml ?? '').replace(/\r\n/g, '\n').match(/^x-branch:[ \t]*(.*)$/m);
-  return (line && yamlScalar(line[1])) || `change/${name}`;
-}
+export const changeBranch = (name, yaml) => topLevelScalar(yaml, 'x-branch') || `change/${name}`;
 
 // The base branch of a change: the top-level `x-base` of its .openspec.yaml,
 // written once when the change opens (ADR 0013). A change made before that key
 // existed uses the default base, the first protected branch that exists.
-export function changeBase(yaml, defaultBase) {
-  const line = (yaml ?? '').replace(/\r\n/g, '\n').match(/^x-base:[ \t]*(.*)$/m);
-  return (line && yamlScalar(line[1])) || defaultBase;
-}
+export const changeBase = (yaml, defaultBase) => topLevelScalar(yaml, 'x-base') || defaultBase;
 
 // A light change (ADR 0011): its .openspec.yaml declares `skip_specs: true`, so
 // it has no delta specs and a single ticket.
@@ -222,8 +222,8 @@ function baseRef(projectDir, base, remote) {
   return remote && git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${base}`) ? `${remote}/${base}` : null;
 }
 
-// The change waiting on hand-over `handOver` to be handed over, as it is on its
-// branch: the base's working tree has neither its tasks.md nor its .openspec.yaml until the branch is merged.
+// The change of a pending hand-over, as it is on its branch: the base's working
+// tree has neither its tasks.md nor its .openspec.yaml until the branch is merged.
 function readArchivedOn(projectDir, { branch, base }, remote) {
   const { folder, metadata } = archiveOn(projectDir, branch, new Set(archiveFolders(projectDir, baseRef(projectDir, base, remote))));
   return changeFrom(archivedName(folder), showArchived(projectDir, branch, folder, 'tasks.md'), metadata, base);

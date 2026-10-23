@@ -291,7 +291,7 @@ describe('change branches', () => {
 
   // A gitflow project, ["develop", "main"], with `fix-login` archived on change/fix-login,
   // cut from main with `x-base: main`, merged into neither.
-  function hotfixArchived() {
+  function archivedOnMain() {
     const dir = installedProject({ config: { protectedBranches: ['develop', 'main'] } });
     git(dir, 'switch', '--quiet', '-c', 'develop');
     git(dir, 'commit', '--quiet', '--allow-empty', '-m', 'feat: on develop');
@@ -305,19 +305,19 @@ describe('change branches', () => {
   }
 
   it('finds the pending hand-over of a change archived on a branch based on main', () => {
-    const status = readStatus(hotfixArchived());
+    const status = readStatus(archivedOnMain());
     assert.equal(status.base, 'develop');
     assert.deepEqual(status.handOvers, [{ change: 'fix-login', branch: 'change/fix-login', base: 'main', pushed: false }]);
     assert.equal(status.next, '/close-change fix-login');
   });
 
   it('prints the snapshot of a hand-over based on main with --report', () => {
-    const result = spawnSync(process.execPath, [STATUS, '--report'], { cwd: hotfixArchived(), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '' } });
+    const result = spawnSync(process.execPath, [STATUS, '--report'], { cwd: archivedOnMain(), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '' } });
     assert.equal(result.stdout, 'Change: fix-login\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n', result.stderr);
   });
 
   it('forgets the hand-over once the branch is merged into its base, though not into the default base', () => {
-    const dir = hotfixArchived();
+    const dir = archivedOnMain();
     git(dir, 'switch', '--quiet', 'main');
     git(dir, 'merge', '--quiet', '--no-ff', '-m', 'merge', 'change/fix-login');
     git(dir, 'switch', '--quiet', 'develop');
@@ -326,8 +326,32 @@ describe('change branches', () => {
     assert.equal(status.state, 'nothing-in-flight', 'bringing main into develop is outside the kit');
   });
 
+  it('forgets the hand-over once its base has the archive, as after a squash merge', () => {
+    const dir = archivedOnMain();
+    git(dir, 'switch', '--quiet', 'main');
+    git(dir, 'merge', '--quiet', '--squash', 'change/fix-login');
+    git(dir, 'commit', '--quiet', '-m', 'fix(fix-login): squashed');
+    git(dir, 'switch', '--quiet', 'develop');
+    assert.deepEqual(readStatus(dir).handOvers, []);
+  });
+
+  it('does not list a change based on develop and merged into it, though main lacks it', () => {
+    const dir = archivedOnMain();
+    git(dir, 'switch', '--quiet', 'main');
+    git(dir, 'merge', '--quiet', '--no-ff', '-m', 'merge', 'change/fix-login');
+    git(dir, 'switch', '--quiet', '-c', 'change/add-greet', 'develop');
+    write(dir, 'openspec/changes/archive/2026-10-23-add-greet/.openspec.yaml', 'schema: spec-driven\nx-branch: "change/add-greet"\nx-base: "develop"\n');
+    write(dir, 'openspec/changes/archive/2026-10-23-add-greet/tasks.md', GREETING.replace(/- \[ \]/g, '- [x]'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', 'docs(add-greet): archive change');
+    git(dir, 'switch', '--quiet', 'develop');
+    assert.deepEqual(readStatus(dir).handOvers, [{ change: 'add-greet', branch: 'change/add-greet', base: 'develop', pushed: false }]);
+    git(dir, 'merge', '--quiet', '--no-ff', '-m', 'merge', 'change/add-greet');
+    assert.deepEqual(readStatus(dir).handOvers, [], 'change/add-greet is not merged into main, which is not its base');
+  });
+
   it('judges a hand-over against <remote>/<base> when the base is not a local branch, and skips it with neither', () => {
-    const dir = hotfixArchived();
+    const dir = archivedOnMain();
     const remote = mkdtempSync(path.join(tmpdir(), 'aw-remote-'));
     git(remote, 'init', '--quiet', '--bare');
     git(dir, 'remote', 'add', 'origin', remote);
