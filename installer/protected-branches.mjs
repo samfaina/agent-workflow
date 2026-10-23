@@ -17,10 +17,11 @@ export function parseProtectedBranches(list, context) {
   return names;
 }
 
-// Whether the repository has a develop branch, local or remote-tracking.
-export function hasDevelopBranch({ projectDir, run }) {
+// Whether the repository has a develop branch, local or remote-tracking. git
+// also lists refs under refs/heads/develop/, which are not develop itself.
+function hasDevelopBranch({ projectDir, run }) {
   const found = run('git for-each-ref refs/heads/develop "refs/remotes/*/develop"', { cwd: projectDir, quiet: true });
-  return found.status === 0 && Boolean(found.stdout?.trim());
+  return found.status === 0 && /\trefs\/(heads|remotes\/[^/]+)\/develop$/m.test(found.stdout ?? '');
 }
 
 // The installer's question, asked again until the list is valid. develop, main
@@ -29,14 +30,15 @@ export function hasDevelopBranch({ projectDir, run }) {
 export async function askProtectedBranches({ io, projectDir, run, step, branchPattern }) {
   const gitflow = branchPattern === GITFLOW_BRANCH || hasDevelopBranch({ projectDir, run });
   const choice = (names, note) => ({ label: names.join(', '), note, value: names.join(',') });
-  const presets = [choice(DEFAULT_PROTECTED_BRANCHES, gitflow ? undefined : 'default'), choice(GITFLOW_PROTECTED_BRANCHES, 'gitflow')];
+  const usual = choice(DEFAULT_PROTECTED_BRANCHES, gitflow ? undefined : 'default');
+  const develop = choice(GITFLOW_PROTECTED_BRANCHES, gitflow ? 'gitflow, default' : 'gitflow');
   for (;;) {
     const answer = await io.choose({
       step,
       title: 'Protected branches',
-      detail: 'Claude never commits or pushes to these branches. Each change starts from the first one that exists in your clone.',
+      detail: 'Claude never commits or pushes to these branches. Each change starts from the first of them that is a local branch.',
       choices: [
-        ...(gitflow ? presets.reverse() : presets),
+        ...(gitflow ? [develop, usual] : [usual, develop]),
         { label: 'Other list…', input: { label: 'Branches, separated by commas' } },
       ],
     });

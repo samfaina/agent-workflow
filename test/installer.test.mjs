@@ -629,7 +629,7 @@ describe('installer protected branches', () => {
       assert.equal(protectedQuestions(io)[0].choices[0].label, 'develop, main', refs[0]);
       assert.deepEqual(written(dir), ['develop', 'main'], refs[0]);
     }
-    const other = gitProject(['refs/heads/developer', 'refs/remotes/origin/feature/develop']);
+    const other = gitProject(['refs/heads/developer', 'refs/heads/develop/next', 'refs/remotes/origin/feature/develop']);
     const io = protectedIO([]);
     await initWith(other, io, { branch: 'change/{change}' });
     assert.equal(protectedQuestions(io)[0].choices[0].label, 'main, master');
@@ -651,6 +651,10 @@ describe('installer protected branches', () => {
     assert.ok(io.questions.some((q) => q.startsWith('WARN Name at least one protected branch')), io.questions.join(' | '));
     assert.ok(io.questions.some((q) => q.startsWith('WARN The protected branches name "bad name"')), io.questions.join(' | '));
     assert.deepEqual(written(dir), ['trunk', 'release']);
+    const gitflow = gitProject(['refs/heads/develop']);
+    const again = protectedIO(['', 'develop,main']);
+    await initWith(gitflow, again, { branch: 'change/{change}' });
+    assert.deepEqual(protectedQuestions(again).map((q) => q.choices[0].label), ['develop, main', 'develop, main']);
   });
 
   it('keeps the protected branches of an existing config without asking, and asks once when they are missing', async () => {
