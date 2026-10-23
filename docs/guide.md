@@ -134,7 +134,7 @@ Describe the idea after the command, for example `/grill-with-docs add a "remove
 
 In the **same session**, so it can use the interview, type `/to-spec remove-todo`. The change name is kebab-case and starts with a verb. Claude:
 
-1. creates the branch `change/remove-todo`;
+1. creates the change branch, `change/remove-todo` under the default branch pattern; the steps below use that name (see [Gitflow and work items in branch names](#gitflow-and-work-items-in-branch-names) for other patterns);
 2. confirms with you the **seams** where tests will go;
 3. writes `proposal.md`, the delta specs and `design.md` in `openspec/changes/remove-todo/`;
 4. runs `openspec validate remove-todo --strict` until it passes;
