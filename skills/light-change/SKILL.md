@@ -16,6 +16,8 @@ Read `docs/agents/issue-tracker.md` first: it defines changes, tickets, branches
 
 The argument is a description of the work, an external reference (`PROJ-123`, `#42`, a URL), or both. With an external reference, read the work item as **Starting from a work item** in the adapter says, and keep the reference. With neither, ask the user what the work is.
 
+The argument may also name the change's **base branch**, such as `/light-change fix-login from main`: keep it for **Branch** in the adapter, which checks it. Without one, the base is the default base; do not ask for it.
+
 Ask only what you need to write the ticket, one question at a time.
 
 ### 2. Check the work qualifies
@@ -33,10 +35,10 @@ When either fails, refuse: say which condition fails and why, and tell the user 
 - **Proposal**: **Why**, one or two sentences on the problem, and **What Changes**, a short bullet list.
 - **Ticket**: one group in the **Ticket format** of the adapter, numbered 1, `Blocked by: none`. A check only a person can make, such as the wording of a message, is one more acceptance criterion, ending in `verified by hand: <what to look at>`. There is no manual test ticket.
 
-Show the name, the proposal and the ticket, and ask the user to approve them or say what to change. Revise until they approve.
+Show the name, the proposal and the ticket, plus the base when the user named one, and ask the user to approve them or say what to change. Revise until they approve.
 
 ### 4. Publish
 
-Follow **When a skill says "publish a light change"** in the adapter. It cuts the change's branch (see **Branch** in the adapter), writes the files, validates them, commits once, projects and pastes the roadmap.
+Follow **When a skill says "publish a light change"** in the adapter. It cuts the change's branch from its base (see **Branch** in the adapter), writes the files, validates them, commits once, projects and pastes the roadmap.
 
 End by telling the user to build the ticket with `/implement <change>` in a fresh session, then close it with `/close-change <change>`.

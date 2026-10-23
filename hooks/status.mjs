@@ -130,6 +130,14 @@ export function changeBranch(name, yaml) {
   return (line && yamlScalar(line[1])) || `change/${name}`;
 }
 
+// The base branch of a change: the top-level `x-base` of its .openspec.yaml,
+// written once when the change opens (ADR 0013). A change made before that key
+// existed uses the default base, the first protected branch that exists.
+export function changeBase(yaml, defaultBase) {
+  const line = (yaml ?? '').replace(/\r\n/g, '\n').match(/^x-base:[ \t]*(.*)$/m);
+  return (line && yamlScalar(line[1])) || defaultBase;
+}
+
 // A light change (ADR 0011): its .openspec.yaml declares `skip_specs: true`, so
 // it has no delta specs and a single ticket.
 const isLight = (yaml) => /^skip_specs:\s*true\s*(?:#.*)?$/m.test(yaml ?? '');
@@ -146,16 +154,17 @@ const metadataIn = (dir) => readIfExists(path.join(dir, '.openspec.yaml'));
 const archivedName = (folder) => /^\d{4}-\d{2}-\d{2}-(.+)$/.exec(folder)?.[1];
 
 // One change, from its tasks.md and .openspec.yaml: its progress, whether it is
-// light, its external references and its branch.
-const changeFrom = (name, tasksMd, metadata) => ({
+// light, its external references, its branch and its base, `defaultBase` without `x-base`.
+const changeFrom = (name, tasksMd, metadata, defaultBase = null) => ({
   ...changeProgress(name, tasksMd),
   light: isLight(metadata),
   references: parseExternalReferences(metadata),
   branch: changeBranch(name, metadata),
+  base: changeBase(metadata, defaultBase),
 });
 
 // One change, read from its folder.
-const readChange = (dir, name) => changeFrom(name, readIfExists(path.join(dir, 'tasks.md')), metadataIn(dir));
+const readChange = (dir, name, defaultBase) => changeFrom(name, readIfExists(path.join(dir, 'tasks.md')), metadataIn(dir), defaultBase);
 
 // A change's name as the developer and the team tracker see it, marking a light change.
 const changeLabel = (change) => (change.light ? `${change.name} (light)` : change.name);
@@ -194,43 +203,63 @@ const archiveFolders = (projectDir, ref) => (git(projectDir, 'ls-tree', '-d', '-
 // A file of archive folder `folder` as it is on `branch`, null when it has none.
 const showArchived = (projectDir, branch, folder, file) => git(projectDir, 'show', `${branch}:openspec/changes/archive/${folder}/${file}`);
 
-// The archive folder on `branch` of the change that lives on it, among the
-// archives `base` lacks (`onBase`), or null. It reads only the .openspec.yaml of those archives.
-function archiveOn(projectDir, branch, onBase) {
+// The archive folder on `branch` of the change that lives on it, with its
+// .openspec.yaml, or null. It skips the archives in `skip` without reading them.
+function archiveOn(projectDir, branch, skip = new Set()) {
   for (const folder of archiveFolders(projectDir, branch)) {
     const name = archivedName(folder);
-    if (!name || onBase.has(folder)) continue;
-    if (changeBranch(name, showArchived(projectDir, branch, folder, '.openspec.yaml')) === branch) return folder;
+    if (!name || skip.has(folder)) continue;
+    const metadata = showArchived(projectDir, branch, folder, '.openspec.yaml');
+    if (changeBranch(name, metadata) === branch) return { folder, metadata };
   }
   return null;
 }
 
-// The change waiting on `branch` to be handed over, as it is on that branch:
-// the base's working tree has neither its tasks.md nor its .openspec.yaml until the branch is merged.
-function readArchivedOn(projectDir, branch, base) {
-  const folder = archiveOn(projectDir, branch, new Set(archiveFolders(projectDir, base)));
-  const show = (file) => showArchived(projectDir, branch, folder, file);
-  return changeFrom(archivedName(folder), show('tasks.md'), show('.openspec.yaml'));
+// The ref a base branch is read from: the local branch, else `<remote>/<base>`, else null.
+function baseRef(projectDir, base, remote) {
+  if (!base) return null;
+  if (git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${base}`)) return base;
+  return remote && git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${base}`) ? `${remote}/${base}` : null;
 }
 
-// Branches not merged into `base` that hold the archive of the change living on
-// them, an archive `base` does not have yet: /close-change has run, and the
-// branch waits to be handed over. The candidates are the branches that start
-// with the fixed part of the `branch` pattern, every branch when it starts with
-// a placeholder, and change/* for changes named before the pattern. `pushed`
-// reads the local remote-tracking branch, so it needs no network.
-function pendingHandOvers(projectDir, base, remote, config) {
-  if (!base) return [];
+// The change waiting on hand-over `handOver` to be handed over, as it is on its
+// branch: the base's working tree has neither its tasks.md nor its .openspec.yaml until the branch is merged.
+function readArchivedOn(projectDir, { branch, base }, remote) {
+  const { folder, metadata } = archiveOn(projectDir, branch, new Set(archiveFolders(projectDir, baseRef(projectDir, base, remote))));
+  return changeFrom(archivedName(folder), showArchived(projectDir, branch, folder, 'tasks.md'), metadata, base);
+}
+
+// Branches that hold the archive of the change living on them, neither merged
+// into that change's base nor with an archive the base already has:
+// /close-change has run, and the branch waits to be handed over. The candidates
+// are the branches not merged into some protected branch that exists, among
+// those that start with the fixed part of the `branch` pattern, every branch
+// when it starts with a placeholder, and change/* for changes named before the
+// pattern. A hand-over whose base exists neither locally nor on `remote` is
+// skipped. `pushed` reads the local remote-tracking branch, so it needs no network.
+function pendingHandOvers(projectDir, defaultBase, remote, config) {
+  const refs = config.protectedBranches.map((b) => baseRef(projectDir, b, remote)).filter(Boolean);
+  if (!refs.length) return [];
   const prefix = config.branch.split('{')[0];
   const globs = prefix ? [...new Set([`${prefix}*`, 'change/*'])] : [];
-  const branches = (git(projectDir, 'branch', '--list', ...globs, '--no-merged', base, '--format=%(refname:short)') ?? '')
-    .split('\n').filter((branch) => branch && !config.protectedBranches.includes(branch));
-  const onBase = new Set(archiveFolders(projectDir, base));
+  const branches = [...new Set(refs.flatMap((ref) => (git(projectDir, 'branch', '--list', ...globs, '--no-merged', ref, '--format=%(refname:short)') ?? '').split('\n')))]
+    .filter((branch) => branch && !config.protectedBranches.includes(branch))
+    .sort();
+  const archives = new Map();
+  const archivesOn = (ref) => {
+    if (!archives.has(ref)) archives.set(ref, new Set(archiveFolders(projectDir, ref)));
+    return archives.get(ref);
+  };
+  // An archive every protected branch has is no change's pending hand-over, so its .openspec.yaml is never read.
+  const everywhere = new Set([...archivesOn(refs[0])].filter((folder) => refs.every((ref) => archivesOn(ref).has(folder))));
   return branches.flatMap((branch) => {
-    const folder = archiveOn(projectDir, branch, onBase);
-    if (!folder) return [];
+    const archive = archiveOn(projectDir, branch, everywhere);
+    if (!archive) return [];
+    const base = changeBase(archive.metadata, defaultBase);
+    const ref = baseRef(projectDir, base, remote);
+    if (!ref || archivesOn(ref).has(archive.folder) || git(projectDir, 'merge-base', '--is-ancestor', branch, ref) !== null) return [];
     const pushed = Boolean(remote && git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${branch}`));
-    return [{ change: archivedName(folder), branch, pushed }];
+    return [{ change: archivedName(archive.folder), branch, base, pushed }];
   });
 }
 
@@ -242,17 +271,18 @@ export function readStatus(projectDir) {
   const installed = existsSync(path.join(projectDir, 'openspec')) && existsSync(path.join(projectDir, '.claude', 'agent-workflow.json'));
   // Work items lag only behind a tracker the agent posts to.
   const ledger = (config.tracker?.via ?? 'none') === 'none' ? null : readLedger(ledgerFile(projectDir));
+  // The default base: the base of a change without `x-base`.
+  const base = config.protectedBranches.find((b) => git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${b}`)) ?? null;
   const active = activeChanges(projectDir);
   const changes = active
     .map((name) => {
-      const change = readChange(path.join(projectDir, 'openspec', 'changes', name), name);
+      const change = readChange(path.join(projectDir, 'openspec', 'changes', name), name, base);
       return { ...change, current: branch === change.branch, behind: ledger ? updatesBehind(change, ledger) : {} };
     })
     // The change in hand comes first; the sort is stable, so the rest keep name order.
     .sort((a, b) => b.current - a.current);
   const dirty = dirtyPaths(projectDir);
   const strayFiles = dirty.filter((file) => !isChangeWork(file));
-  const base = config.protectedBranches.find((b) => git(projectDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${b}`)) ?? null;
   const remotes = (git(projectDir, 'remote') ?? '').split('\n').filter(Boolean);
   const remote = remotes.includes('origin') ? 'origin' : remotes[0] ?? null;
   const handOvers = changes.length ? [] : pendingHandOvers(projectDir, base, remote, config);
@@ -304,8 +334,10 @@ export function formatRoadmap(status) {
   if (status.strayFiles.length) blocks.push(`Files changed outside a change: ${status.strayFiles.join(', ')}. Commit or stash them first.`);
   if (status.state === 'context-lost') blocks.push(`No change in flight, but GLOSSARY.md or docs/adr/ has uncommitted edits. Next: ${status.next}, then /to-spec <change>`);
   for (const h of status.handOvers) {
+    // A change based elsewhere still has to reach the default base: a merge the kit never makes.
+    const backMerge = status.base && h.base !== status.base ? `, then bring ${h.base} into ${status.base}.` : '';
     blocks.push(h.pushed
-      ? `${h.branch} waits for its pull request. Once it is merged: git switch ${status.base} && git pull`
+      ? `${h.branch} waits for its pull request. Once it is merged: git switch ${h.base} && git pull${backMerge}`
       : `${h.branch} is archived and waits to be handed over. Next: /close-change ${h.change}`);
   }
   if (status.state === 'nothing-in-flight') blocks.push(`No change in flight. Next: ${status.next}`);
@@ -569,7 +601,7 @@ function snapshotToPaste(projectDir, status, name) {
     : status.changes.some((c) => c.current) ? status.changes.filter((c) => c.current)
     : status.changes.length ? status.changes
     : status.handOvers.map((h) => ({
-      ...readArchivedOn(projectDir, h.branch, status.base),
+      ...readArchivedOn(projectDir, h, status.remote),
       handOver: h.pushed ? 'waits for its pull request' : 'waits to be handed over',
     }));
   if (name && !changes.length) return null;

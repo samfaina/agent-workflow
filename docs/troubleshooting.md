@@ -113,6 +113,16 @@ Under a change marked `archived`, the hand-over post failed, and no transition f
 
 The `branch` pattern in `.claude/agent-workflow.json` gave a name that `git check-ref-format --branch` rejects, usually because the external reference is a URL or has spaces. Claude never rewrites the name to make it pass. Give the reference in the form your team writes it (`PROJ-123` rather than its URL), or give Claude the branch name for this change by hand: it checks it with git and keeps it in the change's `x-branch`.
 
+### A change was opened on the wrong base branch
+
+A change keeps the base it opened with, in the `x-base` of its `.openspec.yaml`. To move an open change, say from `develop` to `main`, do it by hand on a clean tree:
+
+```bash
+git rebase --onto main develop <branch>
+```
+
+where `<branch>` is the change's `x-branch`. Then set `x-base: "main"` in `openspec/changes/<change>/.openspec.yaml` and commit it. The rebase keeps only the change's own commits; resolve any conflicts with `main` as git asks.
+
 ### Claude asks for an external reference before creating the branch
 
 The `branch` pattern uses `{ref}` and the change has none. Give the work item's reference, which Claude also links to the change, or give the branch name for this change by hand. To stop being asked for changes with no work item, use a pattern without `{ref}`.

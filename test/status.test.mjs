@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSy
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { changeBranch, fillCommand, formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
+import { changeBase, changeBranch, fillCommand, formatRoadmap, parseExternalReferences, readStatus } from '../hooks/status.mjs';
 
 const STATUS = fileURLToPath(new URL('../hooks/status.mjs', import.meta.url));
 
@@ -218,6 +218,18 @@ describe('change branches', () => {
     ]);
   });
 
+  it('gives each active change its x-base, the default base for one made before x-base', () => {
+    const dir = installedProject({
+      config: { protectedBranches: ['develop', 'main'] },
+      changes: { 'add-greet': null, 'fix-login': null },
+      metadata: { 'fix-login': 'schema: spec-driven\nx-branch: "change/fix-login"\nx-base: "main"\n' },
+    });
+    git(dir, 'branch', 'develop');
+    const status = readStatus(dir);
+    assert.equal(status.base, 'develop', 'the snapshot\'s base stays the default base');
+    assert.deepEqual(status.changes.map((c) => [c.name, c.base]), [['add-greet', 'develop'], ['fix-login', 'main']]);
+  });
+
   it('shows on the status line the change whose x-branch is the current branch', () => {
     const dir = installedProject({
       changes: { 'add-greet': GREETING, 'add-export': null },
@@ -247,7 +259,7 @@ describe('change branches', () => {
   it('finds the pending hand-over of a change archived on its x-branch', () => {
     const status = readStatus(archivedOn('feature/POC-1-add-greet', { config: { branch: 'feature/{ref}-{change}' } }));
     assert.equal(status.state, 'hand-over-pending');
-    assert.deepEqual(status.handOvers, [{ change: 'add-greet', branch: 'feature/POC-1-add-greet', pushed: false }]);
+    assert.deepEqual(status.handOvers, [{ change: 'add-greet', branch: 'feature/POC-1-add-greet', base: 'main', pushed: false }]);
     assert.equal(status.next, '/close-change add-greet');
   });
 
@@ -274,7 +286,62 @@ describe('change branches', () => {
     git(archived, 'switch', '--quiet', '-c', 'unrelated');
     git(archived, 'commit', '--quiet', '--allow-empty', '-m', 'chore: unrelated');
     git(archived, 'switch', '--quiet', 'main');
-    assert.deepEqual(readStatus(archived).handOvers, [{ change: 'add-greet', branch: 'POC-1__add-greet--SF', pushed: false }]);
+    assert.deepEqual(readStatus(archived).handOvers, [{ change: 'add-greet', branch: 'POC-1__add-greet--SF', base: 'main', pushed: false }]);
+  });
+
+  // A gitflow project, ["develop", "main"], with `fix-login` archived on change/fix-login,
+  // cut from main with `x-base: main`, merged into neither.
+  function hotfixArchived() {
+    const dir = installedProject({ config: { protectedBranches: ['develop', 'main'] } });
+    git(dir, 'switch', '--quiet', '-c', 'develop');
+    git(dir, 'commit', '--quiet', '--allow-empty', '-m', 'feat: on develop');
+    git(dir, 'switch', '--quiet', '-c', 'change/fix-login', 'main');
+    write(dir, 'openspec/changes/archive/2026-10-22-fix-login/.openspec.yaml', 'schema: spec-driven\nx-branch: "change/fix-login"\nx-base: "main"\n');
+    write(dir, 'openspec/changes/archive/2026-10-22-fix-login/tasks.md', GREETING.replace(/- \[ \]/g, '- [x]'));
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', 'docs(fix-login): archive change');
+    git(dir, 'switch', '--quiet', 'develop');
+    return dir;
+  }
+
+  it('finds the pending hand-over of a change archived on a branch based on main', () => {
+    const status = readStatus(hotfixArchived());
+    assert.equal(status.base, 'develop');
+    assert.deepEqual(status.handOvers, [{ change: 'fix-login', branch: 'change/fix-login', base: 'main', pushed: false }]);
+    assert.equal(status.next, '/close-change fix-login');
+  });
+
+  it('prints the snapshot of a hand-over based on main with --report', () => {
+    const result = spawnSync(process.execPath, [STATUS, '--report'], { cwd: hotfixArchived(), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: '' } });
+    assert.equal(result.stdout, 'Change: fix-login\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n', result.stderr);
+  });
+
+  it('forgets the hand-over once the branch is merged into its base, though not into the default base', () => {
+    const dir = hotfixArchived();
+    git(dir, 'switch', '--quiet', 'main');
+    git(dir, 'merge', '--quiet', '--no-ff', '-m', 'merge', 'change/fix-login');
+    git(dir, 'switch', '--quiet', 'develop');
+    const status = readStatus(dir);
+    assert.deepEqual(status.handOvers, []);
+    assert.equal(status.state, 'nothing-in-flight', 'bringing main into develop is outside the kit');
+  });
+
+  it('judges a hand-over against <remote>/<base> when the base is not a local branch, and skips it with neither', () => {
+    const dir = hotfixArchived();
+    const remote = mkdtempSync(path.join(tmpdir(), 'aw-remote-'));
+    git(remote, 'init', '--quiet', '--bare');
+    git(dir, 'remote', 'add', 'origin', remote);
+    git(dir, 'push', '--quiet', 'origin', 'main');
+    git(dir, 'branch', '--quiet', '-d', 'main');
+    assert.deepEqual(readStatus(dir).handOvers, [{ change: 'fix-login', branch: 'change/fix-login', base: 'main', pushed: false }]);
+
+    git(dir, 'push', '--quiet', 'origin', 'change/fix-login:main');
+    git(dir, 'fetch', '--quiet', 'origin');
+    assert.deepEqual(readStatus(dir).handOvers, [], 'merged into origin/main');
+
+    git(dir, 'remote', 'remove', 'origin');
+    git(dir, 'remote', 'add', 'origin', remote);
+    assert.deepEqual(readStatus(dir).handOvers, [], 'no main and no origin/main: skipped, not reported');
   });
 
   it('still finds the hand-over of a change/<change> branch after the pattern changed', () => {
@@ -284,7 +351,7 @@ describe('change branches', () => {
     git(dir, 'add', '-A');
     git(dir, 'commit', '--quiet', '-m', 'docs(add-greeting): archive change');
     git(dir, 'switch', '--quiet', 'main');
-    assert.deepEqual(readStatus(dir).handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', pushed: false }]);
+    assert.deepEqual(readStatus(dir).handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', base: 'main', pushed: false }]);
   });
 });
 
@@ -340,7 +407,7 @@ describe('states of the repository', () => {
     const status = readStatus(archivedOnBranch());
     assert.equal(status.state, 'hand-over-pending');
     assert.equal(status.base, 'main');
-    assert.deepEqual(status.handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', pushed: false }]);
+    assert.deepEqual(status.handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', base: 'main', pushed: false }]);
     assert.equal(status.next, '/close-change add-greeting');
   });
 
@@ -353,7 +420,7 @@ describe('states of the repository', () => {
     const status = readStatus(dir);
     assert.equal(status.state, 'hand-over-pending');
     assert.equal(status.remote, 'origin');
-    assert.deepEqual(status.handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', pushed: true }]);
+    assert.deepEqual(status.handOvers, [{ change: 'add-greeting', branch: 'change/add-greeting', base: 'main', pushed: true }]);
     assert.equal(status.next, null, 'the pull request is merged in the code host');
   });
 
@@ -388,11 +455,11 @@ describe('counts against OpenSpec', { skip: !openspecInstalled && 'openspec is n
   });
 });
 
-describe('external references and x-branch in OpenSpec', { skip: !openspecInstalled && 'openspec is not installed' }, () => {
+describe('external references, x-branch and x-base in OpenSpec', { skip: !openspecInstalled && 'openspec is not installed' }, () => {
   it('passes validate --strict and survives the archive', () => {
     const dir = installedProject({
       changes: { 'add-greeting': '## 1. Greet\n\nBlocked by: none\n\n- [x] 1.1 greets; verified by a test\n' },
-      metadata: { 'add-greeting': 'schema: spec-driven\ncreated: 2026-10-19\nx-branch: "feature/#42-add-greeting"\nx-external-references:\n  - PROJ-1\n  - "#42"\n' },
+      metadata: { 'add-greeting': 'schema: spec-driven\ncreated: 2026-10-19\nx-branch: "feature/#42-add-greeting"\nx-base: "main"\nx-external-references:\n  - PROJ-1\n  - "#42"\n' },
     });
     write(dir, 'openspec/changes/add-greeting/proposal.md', '## Why\n\nUsers starting the CLI should be greeted so they know it works.\n\n## What Changes\n\n- Print a greeting.\n\n## Capabilities\n\n### New Capabilities\n\n- `greeting`: greets the user.\n\n### Modified Capabilities\n\nNone.\n\n## Impact\n\nThe CLI.\n');
     write(dir, 'openspec/changes/add-greeting/specs/greeting/spec.md', '## ADDED Requirements\n\n### Requirement: Greet the user\n\nThe CLI SHALL print a greeting when it starts.\n\n#### Scenario: Start the CLI\n\n- **WHEN** the user starts the CLI\n- **THEN** it prints "Hello"\n');
@@ -405,6 +472,7 @@ describe('external references and x-branch in OpenSpec', { skip: !openspecInstal
     const yaml = readFileSync(path.join(dir, 'openspec', 'changes', 'archive', folder, '.openspec.yaml'), 'utf8');
     assert.deepEqual(parseExternalReferences(yaml), ['PROJ-1', '#42']);
     assert.equal(changeBranch('add-greeting', yaml), 'feature/#42-add-greeting');
+    assert.equal(changeBase(yaml, 'develop'), 'main');
   });
 });
 
@@ -487,6 +555,14 @@ describe('developer view', () => {
     const dir = installedProject({ changes: { 'add-export': null } });
     write(dir, 'src/cli.js', 'x\n');
     assert.match(formatRoadmap(readStatus(dir)), /^add-export · no tickets yet\n {2}next: \/to-tickets add-export\n\nFiles changed outside a change: src\/cli\.js\. Commit or stash them first\.$/);
+  });
+
+  it('reminds to bring the base into the default base once the pull request of a change based elsewhere is merged', () => {
+    const view = (handOver) => formatRoadmap({ state: 'hand-over-pending', base: 'develop', changes: [], strayFiles: [], handOvers: [handOver] });
+    assert.equal(view({ change: 'fix-login', branch: 'change/fix-login', base: 'main', pushed: true }),
+      'change/fix-login waits for its pull request. Once it is merged: git switch main && git pull, then bring main into develop.');
+    assert.equal(view({ change: 'add-greet', branch: 'change/add-greet', base: 'develop', pushed: true }),
+      'change/add-greet waits for its pull request. Once it is merged: git switch develop && git pull');
   });
 
   it('says what comes next when no change is in flight', () => {
