@@ -619,6 +619,14 @@ describe('status command', () => {
     assert.equal(result.stdout, 'Change: add-greet\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n');
   });
 
+  it('prints the change waiting to be handed over with --report on its own branch too, right after /close-change', () => {
+    const dir = archiveChange(installedProject(), 'add-greet', 'change/add-greet');
+    git(dir, 'switch', '--quiet', 'change/add-greet');
+    const result = run(dir, '--report');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Change: add-greet\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n');
+  });
+
   it('prints a change whose branch is pushed as waiting for its pull request with --report', () => {
     const dir = archiveChange(installedProject(), 'add-greet', 'change/add-greet');
     const remote = mkdtempSync(path.join(tmpdir(), 'aw-remote-'));
