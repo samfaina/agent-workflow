@@ -600,6 +600,66 @@ describe('status command', () => {
     assert.equal(result.stdout, 'No change in flight.\n');
   });
 
+  // Archives `change` on `branch`, not merged into main: `yaml` holds the lines its
+  // .openspec.yaml adds after `x-branch`.
+  function archiveChange(dir, change, branch, { yaml = '', tasks = GREETING.replace(/- \[ \]/g, '- [x]') } = {}) {
+    git(dir, 'switch', '--quiet', '-c', branch, 'main');
+    write(dir, `openspec/changes/archive/2026-10-22-${change}/.openspec.yaml`, `schema: spec-driven\nx-branch: "${branch}"\n${yaml}`);
+    write(dir, `openspec/changes/archive/2026-10-22-${change}/tasks.md`, tasks);
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '--quiet', '-m', `docs(${change}): archive change`);
+    git(dir, 'switch', '--quiet', 'main');
+    return dir;
+  }
+
+  it('prints the snapshot of a change waiting to be handed over with --report, read from its branch', () => {
+    const dir = archiveChange(installedProject(), 'add-greet', 'change/add-greet');
+    const result = run(dir, '--report');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Change: add-greet\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n');
+  });
+
+  it('prints the change waiting to be handed over with --report on its own branch too, right after /close-change', () => {
+    const dir = archiveChange(installedProject(), 'add-greet', 'change/add-greet');
+    git(dir, 'switch', '--quiet', 'change/add-greet');
+    const result = run(dir, '--report');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Change: add-greet\nStage: finished, waits to be handed over\nTickets done: 4 of 4\n');
+  });
+
+  it('prints a change whose branch is pushed as waiting for its pull request with --report', () => {
+    const dir = archiveChange(installedProject(), 'add-greet', 'change/add-greet');
+    const remote = mkdtempSync(path.join(tmpdir(), 'aw-remote-'));
+    git(remote, 'init', '--quiet', '--bare');
+    git(dir, 'remote', 'add', 'origin', remote);
+    git(dir, 'push', '--quiet', 'origin', 'change/add-greet');
+    const result = run(dir, '--report');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'Change: add-greet\nStage: finished, waits for its pull request\nTickets done: 4 of 4\n');
+  });
+
+  it('prints every change waiting to be handed over with --report, light or with work items', () => {
+    const dir = archiveChange(installedProject(), 'add-greet', 'change/add-greet', { yaml: 'x-external-references:\n  - POC-1\n' });
+    archiveChange(dir, 'fix-typo', 'change/fix-typo', {
+      yaml: 'skip_specs: true\n',
+      tasks: '## 1. Fix the typo\n\nBlocked by: none\n\n- [x] 1.1 the help says "greet"; verified by a CLI test\n',
+    });
+    assert.equal(run(dir, '--report').stdout, [
+      'Change: add-greet',
+      'Stage: finished, waits to be handed over',
+      'Tickets done: 4 of 4',
+      'Work items: POC-1',
+      '',
+      'Change: fix-typo (light)',
+      'Stage: finished, waits to be handed over',
+      'Tickets done: 1 of 1',
+      '',
+    ].join('\n'));
+    const archived = run(dir, '--report', 'add-greet');
+    assert.equal(archived.status, 1);
+    assert.equal(archived.stderr, 'No active change named add-greet.\n');
+  });
+
   it('rejects an unknown option', () => {
     const result = run(installedProject(), '--nope');
     assert.equal(result.status, 1);
