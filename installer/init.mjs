@@ -8,6 +8,7 @@ import { askBranch, DEFAULT_BRANCH, parseBranch, setBranchUser } from './branch.
 import { SKILLS, SOURCES, skillsWhere, specialistLines } from './catalog.mjs';
 import { addPackageScript, ensureGitignored, mergeSettings, settingsHave, writeBlockSafely, writeFileSafely, writeLanguageSetting, writeLocalSetting } from './files.mjs';
 import { mergeWorkflowConfig, parsePullRequest, pullRequestFollowUp, pullRequestQuestion, readWorkflowConfig } from './pull-request.mjs';
+import { askProtectedBranches, DEFAULT_PROTECTED_BRANCHES, parseProtectedBranches } from './protected-branches.mjs';
 import { fetchText as defaultFetchText, installReferences } from './references.mjs';
 import { askTracker, parseTracker } from './tracker.mjs';
 
@@ -48,6 +49,7 @@ export async function init({
   checkCommand,
   pullRequest,
   branch,
+  protectedBranches,
   user,
   tracker,
   statusLine,
@@ -64,15 +66,18 @@ export async function init({
     io.warn('This folder is not a git repository. The hooks expect one: run `git init` first.');
   }
   // A project that already chose how pull requests are opened, how change
-  // branches are named, or how progress reaches its team tracker, is not asked again.
+  // branches are named, which branches are protected, or how progress reaches
+  // its team tracker, is not asked again.
   const workflowConfigFile = path.join(claudeDir, 'agent-workflow.json');
   const existingConfig = readWorkflowConfig(workflowConfigFile) ?? {};
   const askPullRequest = pullRequest === undefined && !('pullRequest' in existingConfig);
   const askBranchQuestion = branch === undefined && !('branch' in existingConfig);
+  const askProtectedBranchesQuestion = protectedBranches === undefined && !('protectedBranches' in existingConfig);
   const askTrackerQuestion = tracker === undefined && !('tracker' in existingConfig);
-  const steps = 2 + askPullRequest + askBranchQuestion + askTrackerQuestion;
-  // A wrong --branch stops the run before anything is written.
+  const steps = 2 + askPullRequest + askBranchQuestion + askProtectedBranchesQuestion + askTrackerQuestion;
+  // A wrong --branch or --protected-branches stops the run before anything is written.
   const branchSetting = branch === undefined ? undefined : parseBranch(branch, { projectDir, run });
+  const protectedBranchesSetting = protectedBranches === undefined ? undefined : parseProtectedBranches(protectedBranches, { projectDir, run });
   language ??= await io.choose({
     step: `1/${steps}`,
     title: 'Language',
@@ -103,6 +108,9 @@ export async function init({
     ? await askBranch({ io, projectDir, run, step: `${3 + askPullRequest}/${steps}` })
     : branchSetting ?? existingConfig.branch ?? DEFAULT_BRANCH;
   await setBranchUser(branchPattern, { io, projectDir, run, user });
+  const protectedBranchesList = askProtectedBranchesQuestion
+    ? await askProtectedBranches({ io, projectDir, run, branchPattern, step: `${3 + askPullRequest + askBranchQuestion}/${steps}` })
+    : protectedBranchesSetting ?? existingConfig.protectedBranches ?? DEFAULT_PROTECTED_BRANCHES;
   const trackerSetting = askTrackerQuestion
     ? await askTracker({ io, projectDir, step: `${steps}/${steps}` })
     : parseTracker(tracker ?? 'none');
@@ -179,7 +187,9 @@ export async function init({
   ensureGitignored(projectDir, '.claude/settings.local.json', ctx);
   // A setting object on one line, as the template's other values are.
   const inline = (setting) => JSON.stringify(setting, null, 1).replace(/\n\s*/g, ' ');
+  // The branch names go in through a function, so a $ in one is not read as a replacement pattern.
   const workflowConfig = template('.claude/agent-workflow.json')
+    .replace('"{{PROTECTED_BRANCHES}}"', () => `[${protectedBranchesList.map((name) => JSON.stringify(name)).join(', ')}]`)
     .replace('"{{CHECK_COMMAND}}"', JSON.stringify(checkCommand))
     .replace('"{{BRANCH}}"', JSON.stringify(branchPattern))
     .replace('"{{PULL_REQUEST}}"', inline(pullRequestSetting))
@@ -189,6 +199,7 @@ export async function init({
     'checkCommand',
     ...(pullRequest === undefined ? [] : ['pullRequest']),
     ...(askBranchQuestion || branch !== undefined ? ['branch'] : []),
+    ...(askProtectedBranchesQuestion || protectedBranches !== undefined ? ['protectedBranches'] : []),
     ...(askTrackerQuestion || tracker !== undefined ? ['tracker'] : []),
   ];
   if (existsSync(workflowConfigFile)) await mergeWorkflowConfig(workflowConfigFile, JSON.parse(workflowConfig), { ...ctx, answered });
