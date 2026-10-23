@@ -112,7 +112,7 @@ Three hooks run before Claude's tools. They are configured in `.claude/agent-wor
 | `quality-gate` | Bash and PowerShell commands that contain `git commit` | the commit, when `checkCommand` fails; Claude sees the last lines of its output |
 | `protected-paths` | File edits by Claude, and Bash and PowerShell commands | edits to any path matching `protectedPaths` (`**` crosses folders; a pattern without `/` matches a file name anywhere), and commands that write, move or delete such a path: redirections (`>`, `>>`), `tee`, `cp`, `mv`, `rm`, `touch`, `sed -i`, `Set-Content`, `Add-Content`, `Out-File`, `New-Item`, `Remove-Item`, `Copy-Item`, `Move-Item` |
 
-`protectedBranches` comes from the installer's **Protected branches** question, asked after **Branch names**: `main, master`, `develop, main`, or names of your own separated by commas. `develop, main` comes first, and is what `--yes` takes, when the repository has a `develop` branch (`refs/heads/develop` or `refs/remotes/*/develop`) or the branch pattern is `feature/{ref}-{change}`; otherwise `main, master` does. `--protected-branches develop,main` answers it. The installer rejects an empty list and any name `git check-ref-format --branch` rejects. Running it again keeps the `protectedBranches` already in the file. Each change is cut from one protected branch, its base, kept in its `.openspec.yaml` as `x-base`: the first protected branch that is a local branch, unless you name another one when the change opens.
+`protectedBranches` comes from the installer's **Protected branches** question, asked after **Branch names**: `main, master`, `develop, main`, or names of your own separated by commas. `develop, main` comes first, and is what `--yes` takes, when the repository has a `develop` branch (`refs/heads/develop` or `refs/remotes/*/develop`) or the branch pattern is `feature/{ref}__{change}` (or `feature/{ref}-{change}`, the gitflow pattern the installer offered before); otherwise `main, master` does. `--protected-branches develop,main` answers it. The installer rejects an empty list and any name `git check-ref-format --branch` rejects. Running it again keeps the `protectedBranches` already in the file. Each change is cut from one protected branch, its base, kept in its `.openspec.yaml` as `x-base`: the first protected branch that is a local branch, unless you name another one when the change opens.
 
 `.claude/agent-workflow.json` is itself protected, so Claude cannot loosen its own guardrails: edit it yourself. The living spec (`openspec/specs/`) is protected because only `openspec archive`, run by `/close-change`, should change it.
 
@@ -171,14 +171,14 @@ The `branch` setting in `.claude/agent-workflow.json` names the branch of each n
 | `{ref}` | The change's first external reference, as written, such as `PROJ-123` |
 | `{user}` | Your own value, from `git config agent-workflow.user` |
 
-The default, `change/{change}`, gives `change/add-greeting`. `feature/{ref}-{change}` gives `feature/PROJ-123-add-greeting`, which Jira links to its work item through Bitbucket. `{ref}__{change}--{user}` gives `PROJ-123__add-greeting--AB`.
+The default, `change/{change}`, gives `change/add-greeting`. `feature/{ref}__{change}` gives `feature/PROJ-123__add-greeting`, which Jira links to its work item through Bitbucket. `{ref}__{change}--{user}` gives `PROJ-123__add-greeting--AB`.
 
 `agent-workflow.json` is shared by the team, so `{user}` comes from each developer's clone: `git config agent-workflow.user AB` sets it there, and it is never committed. The installer sets it when the pattern uses `{user}`, from your answer or `--user <value>`; with `--yes` and no `--user`, Claude asks for it the first time it opens a change.
 
 Claude fills the pattern in once, when the change opens, and writes the result in the change's `.openspec.yaml` as `x-branch`, next to its base, `x-base`, and `x-external-references`:
 
 ```yaml
-x-branch: "feature/PROJ-123-add-greeting"
+x-branch: "feature/PROJ-123__add-greeting"
 x-base: "develop"
 ```
 
@@ -193,7 +193,7 @@ A team whose changes branch off more than one protected branch can give each bas
 
 A change based on `main` with the reference `POC-1` gets `hotfix/POC-1__fix-login`; one based on `develop` gets `feature/POC-1__add-greet`. A base without an entry takes the entry of the first protected branch that has one. Every key must be one of `protectedBranches`, and the object needs at least one; Claude stops when it meets an object that breaks either rule. The status module looks for pending hand-overs among all unmerged branches, whatever the patterns, and the `git-guard` message shows the pattern of the default base.
 
-The installer asks after **Pull requests**: `change/{change}`, `feature/{ref}-{change}` (gitflow with work items), or a pattern of your own; `--branch "<pattern>"` answers it. It rejects a pattern without `{change}`, with any other placeholder, or whose sample name git rejects. When **Protected branches** lists more than one branch, it then asks **Branch names for changes based on `<branch>`** for each one after the first, offering the first pattern with a leading `feature/` turned into `hotfix/`, else the same pattern. It writes an object only when the patterns differ, a string otherwise. Without a question, `--branch-for <base>=<pattern>`, repeated for each base, gives the pattern of another protected branch next to `--branch` (`change/{change}` without it; a `--branch-for` naming the first protected branch replaces it), and the installer rejects a base outside the protected branches; with `--branch` or `--branch-for`, it asks no branch question. `--yes` writes `change/{change}` as a string. Running it again keeps the `branch` already in the file.
+The installer asks after **Pull requests**: `change/{change}`, `feature/{ref}__{change}` (gitflow with work items), or a pattern of your own; `--branch "<pattern>"` answers it. It rejects a pattern without `{change}`, with any other placeholder, or whose sample name git rejects. When **Protected branches** lists more than one branch, it then asks **Branch names for changes based on `<branch>`** for each one after the first, offering the first pattern with a leading `feature/` turned into `hotfix/`, else the same pattern. It writes an object only when the patterns differ, a string otherwise. Without a question, `--branch-for <base>=<pattern>`, repeated for each base, gives the pattern of another protected branch next to `--branch` (`change/{change}` without it; a `--branch-for` naming the first protected branch replaces it), and the installer rejects a base outside the protected branches; with `--branch` or `--branch-for`, it asks no branch question. `--yes` writes `change/{change}` as a string. Running it again keeps the `branch` already in the file.
 
 ## Pull requests
 

@@ -732,9 +732,31 @@ describe('installer protected branches', () => {
   it('offers develop, main first when the gitflow branch pattern is chosen in the same run', async () => {
     const dir = newProject();
     const io = protectedIO([]);
-    await initWith(dir, { ...io, async choose(question) { return question.title === 'Branch names' ? 'feature/{ref}-{change}' : io.choose(question); } });
+    let offered;
+    await initWith(dir, {
+      ...io,
+      async choose(question) {
+        if (question.title !== 'Branch names') return io.choose(question);
+        offered = question.choices.find((c) => c.note === 'gitflow + work item');
+        return offered.value;
+      },
+    });
+    assert.equal(offered.label, 'feature/{ref}__{change}');
     assert.equal(protectedQuestions(io)[0].choices[0].label, 'develop, main');
     assert.deepEqual(written(dir), ['develop', 'main']);
+    assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).branch.develop, 'feature/{ref}__{change}');
+  });
+
+  it('offers develop, main first for a config that keeps the earlier gitflow pattern, feature/{ref}-{change}', async () => {
+    const dir = newProject();
+    const config = { allowPush: false, checkCommand: 'npm test', pullRequest: { via: 'none' }, tracker: { via: 'none' }, branch: 'feature/{ref}-{change}', protectedPaths: [] };
+    mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    writeFileSync(path.join(dir, '.claude', 'agent-workflow.json'), JSON.stringify(config));
+    const io = protectedIO([]);
+    await initWith(dir, io);
+    assert.ok(!io.asked.some((q) => q.title === 'Branch names'));
+    assert.equal(protectedQuestions(io)[0].choices[0].label, 'develop, main');
+    assert.equal(JSON.parse(read(dir, '.claude/agent-workflow.json')).branch, 'feature/{ref}-{change}');
   });
 
   it('asks again until the list is valid', async () => {

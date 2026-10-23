@@ -2,10 +2,11 @@
 // `protectedBranches` setting in .claude/agent-workflow.json. Each change is cut
 // from one of them, its base; the first one that exists locally is the default.
 import { DEFAULT_CONFIG } from '../hooks/shared.mjs';
-import { GITFLOW_BRANCH, gitTakesBranchName } from './branch.mjs';
+import { EARLIER_GITFLOW_BRANCH, GITFLOW_BRANCH, gitTakesBranchName } from './branch.mjs';
 
 export const DEFAULT_PROTECTED_BRANCHES = DEFAULT_CONFIG.protectedBranches;
 const GITFLOW_PROTECTED_BRANCHES = ['develop', 'main'];
+const GITFLOW_BRANCH_PATTERNS = [GITFLOW_BRANCH, EARLIER_GITFLOW_BRANCH];
 
 // The setting from a list of names separated by commas; throws when it names
 // no branch, or a branch git rejects.
@@ -26,9 +27,9 @@ function hasDevelopBranch({ projectDir, run }) {
 
 // The installer's question, asked again until the list is valid. develop, main
 // comes first when the project looks like gitflow: it has a develop branch, or
-// its change branches follow the gitflow pattern.
+// its change branches follow a gitflow pattern, the one offered or the earlier one.
 export async function askProtectedBranches({ io, projectDir, run, step, branchPatterns }) {
-  const gitflow = branchPatterns.includes(GITFLOW_BRANCH) || hasDevelopBranch({ projectDir, run });
+  const gitflow = branchPatterns.some((pattern) => GITFLOW_BRANCH_PATTERNS.includes(pattern)) || hasDevelopBranch({ projectDir, run });
   const choice = (names, note) => ({ label: names.join(', '), note, value: names.join(',') });
   const usual = choice(DEFAULT_PROTECTED_BRANCHES, gitflow ? undefined : 'default');
   const develop = choice(GITFLOW_PROTECTED_BRANCHES, gitflow ? 'gitflow, default' : 'gitflow');

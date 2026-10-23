@@ -6,7 +6,9 @@ import { BRANCH_PLACEHOLDER, branchPatterns, DEFAULT_CONFIG } from '../hooks/sha
 import { shellQuote } from '../hooks/status.mjs';
 
 export const DEFAULT_BRANCH = DEFAULT_CONFIG.branch;
-export const GITFLOW_BRANCH = 'feature/{ref}-{change}';
+export const GITFLOW_BRANCH = 'feature/{ref}__{change}';
+// The gitflow pattern the installer offered before; configs that have it keep it.
+export const EARLIER_GITFLOW_BRANCH = 'feature/{ref}-{change}';
 // The value each placeholder takes when a pattern is checked; its keys are the placeholders.
 const SAMPLE = { change: 'add-greeting', ref: 'PROJ-123', user: 'AB' };
 const USER_KEY = 'agent-workflow.user';

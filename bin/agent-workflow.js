@@ -45,7 +45,7 @@ Options for init:
   --protected-branches <list>
                        Branches Claude never commits or pushes to, separated by commas
                        (default: develop,main when the repository has a develop branch
-                       or the branch pattern is feature/{ref}-{change}, otherwise main,master)
+                       or the branch pattern is feature/{ref}__{change}, otherwise main,master)
   --user <value>       Your value for {user}, stored with git config agent-workflow.user
   --tracker <how>      How Claude posts progress to your team tracker: none, mcp:<server>,
                        or a command using {ref} {change} {stage} {done} {total} {url}
